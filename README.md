@@ -1,2 +1,5 @@
-# ldcsplbtk
-code for manipulating speech labels, annotations, and transcripts
+# LDC Speech Label Toolkit
+
+Code for manipulating text based speech labels, including transcripts.
+
+
