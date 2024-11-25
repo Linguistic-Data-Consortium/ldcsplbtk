@@ -31,11 +31,12 @@ fns.sort.each do |fn|
   if sample.nil?
     sample = if header
       Sample.new fn: fn, header: header
+      header = !!header
     else
       Sample.new fn: fn, string: string
     end
   else
-    sample.add_from_string fn:, string:
+    sample.add_from_string fn:, string:, headerless: header
   end
 end
 

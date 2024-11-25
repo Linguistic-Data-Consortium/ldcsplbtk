@@ -49,9 +49,9 @@ class Sample
   end
 
   # add while checking format
-  def add_from_string(fn:, string:)
+  def add_from_string(fn:, string:, headerless: false)
     string.lines.map(&:chomp).each_with_index do |line, i|
-      if i == 0
+      if i == 0 and not headerless
         raise "bad header: #{line}" if line != @header_string
       else
         add_segment_from_line fn:, line:
