@@ -60,7 +60,7 @@ class Sample
   end
 
   def add_segment_from_line(fn:, line:)
-    a = line.split "\t"
+    a = line.split "\t", -1
     if a.length != @header_array.length
       raise "bad line, #{a.length} columns: #{line.gsub "\t", "TAB"}"
     end
