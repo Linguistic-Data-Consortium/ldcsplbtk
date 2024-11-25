@@ -40,7 +40,7 @@ fns.sort.each do |fn|
   end
 end
 
-sample.puts
+sample.print
 
 
 

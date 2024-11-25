@@ -106,7 +106,7 @@ class Sample
     end
   end
 
-  def puts
+  def print
     puts @header_string
     puts @segments.map { |x| @header_array.map { |y| x[y.to_sym] }.join "\t" }
   end
