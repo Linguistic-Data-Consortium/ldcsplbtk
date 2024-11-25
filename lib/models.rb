@@ -3,7 +3,7 @@ require 'json'
 # a uniform set of segments
 class Sample
 
-  def initialize(fn:, string:, header:)
+  def initialize(fn:, string: nil, header: nil)
     @segments = []
     if header
       check_header_line header
