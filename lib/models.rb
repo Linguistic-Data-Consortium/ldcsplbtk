@@ -195,7 +195,26 @@ class Sample
           @segments << s
         end
       end
-    elsif object['results'] # assume google cloud
+    elsif object['results'] # assume google cloud v2
+      a = object['results'].last['alternatives']
+      raise "the file name must be set" if @fn.nil?
+      set_header %w[ file beg end text speaker ]
+      object['results'].each do |r|
+        r['alternatives'].first['words'].each do |w|
+          s = {}
+          if true #e['type'] == 'text'
+            s = {
+              file: @fn,
+              beg: gctsv2(w['startOffset']),
+              end: gctsv2(w['endOffset']),
+              text: w['word'],
+              speaker: w['speakerLabel']
+            }
+            @segments << s
+          end
+        end
+      end
+    elsif object['results'] # assume google cloud v1
       a = object['results'].last['alternatives']
       if a.first.keys.length == 3
         raise "unknown format; might be google cloud without speaker tags"
@@ -241,15 +260,35 @@ class Sample
       raise "the file name must be set" if @fn.nil?
       set_header %w[ file beg end text ]
       # @header ||= %w[ file beg end text speaker ]
-      object['segments'].each do |m|
-        m['words'].each do |e|
-          s = {
-            file: @fn,
-            beg: e['start'],
-            end: e['end'],
-            text: e['word'].gsub(/\s/, '')
-          }
-          @segments << s
+      if object['segments'].first['words']
+        object['segments'].each do |m|
+          m['words'].each do |e|
+            s = {
+              file: @fn,
+              beg: e['start'],
+              end: e['end'],
+              text: e['word'].gsub(/\s/, '')
+            }
+            @segments << s
+          end
+        end
+      else
+        object['segments'].each do |m|
+          words = m['text'].split
+          bb = m['start']
+          inc = (m['end']-bb) / words.length
+          words.each_with_index do |e, i|
+            ee = bb + inc
+            s = {
+              file: @fn,
+              beg: bb.round(3),
+              end: ee.round(3),
+              text: e.gsub(/\s/, '')
+            }
+            @segments << s
+            bb = ee
+          end
+          @segments[-1][:end] = m['end']
         end
       end
     elsif object['transcription'] # assume whisper.cpp
@@ -257,13 +296,14 @@ class Sample
       raise "the file name must be set" if @fn.nil?
       set_header %w[ file beg end text ]
       # @header ||= %w[ file beg end text speaker ]
+      return if object['transcription'].length == 0
       last = object['transcription'][0]['offsets']['from']
       object['transcription'].each do |m|
         next if m['text'].length == 0
         # puts e['text']
         bb = (m['offsets']['from'].to_f / 1000).round(3)
         ee = (m['offsets']['to'].to_f / 1000).round(3)
-        tt = m['text'].gsub(/\s|"/, '')
+        tt = m['text']#.gsub(/\s|"/, '')
         s = {
           file: @fn,
           beg: bb,
@@ -334,6 +374,11 @@ class Sample
     x['nanos'].to_f / 1_000_000_000 + x['seconds'].to_f
   end
 
+  def gctsv2(x)
+    return 0.0 if x.nil?
+    x.sub('s','').to_f
+  end
+
   def print_prep(norm: false, after_time: nil, after_time_with_map: nil)
     @segments.each do |x|
       x[:file] = x[:file].sub(/^.+\//, '').sub /\.\w+$/, ''
@@ -351,7 +396,7 @@ class Sample
   end
 
   def print(norm: false, after_time: nil, after_time_with_map: nil)
-    segments = print_prep(norm: false, after_time: nil, after_time_with_map: nil)
+    segments = print_prep(norm: , after_time: , after_time_with_map: )
     #puts @segments.first[:end]
     #puts after_time_with_map[@segments.first[:file]]
     puts segments.map { |x| segment2line x }
@@ -683,6 +728,35 @@ class Sample
         f.puts v.map { |x| segment2line x }
       end
     end
+  end
+
+  def count_unintelligible
+    files = {}
+    @segments.each do |x|
+      files[x[:file]] ||= 0
+      files[x[:file]] += x[:text].split.count { |x| x =~ /^\(\(/ }
+    end
+    files
+  end
+
+  def count_overlap
+    files = {}
+    overlap = {}
+    @segments.each do |x|
+      files[x[:file]] ||= []
+      files[x[:file]] << x
+      overlap[x[:file]] ||= 0
+      files[x[:file]].each do |y|
+        next if x == y
+        if x[:end] > y[:beg] and x[:beg] < y[:end]
+          b = x[:beg] > y[:beg] ? x[:beg] : y[:beg]
+          e = x[:end] < y[:end] ? x[:end] : y[:end]
+          o = e - b
+          overlap[x[:file]] += o
+        end
+      end
+    end
+    overlap
   end
 
 end
