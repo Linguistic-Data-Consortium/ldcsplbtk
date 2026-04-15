@@ -78,7 +78,7 @@ class Sample
   end
 
   def timestamp(x)
-    x =~ /^\d+\.\d+\z/
+    x =~ /^\d+(\.\d*)?\z/
   end
 
   def check_header(line)
