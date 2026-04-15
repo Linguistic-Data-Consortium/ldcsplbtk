@@ -812,31 +812,38 @@ class Sample
   end
 
   # Calculate comprehensive segment statistics per file.
-  # @param combined [Boolean] If true, treat all segments as single document (ignore file column)
+  # @param combined [Boolean] If true, calculate averages across all segments (gaps still within file boundaries)
   # @return [Hash] Map of filename to stats hash with :avg_length, :avg_gap, :count
   def segment_statistics(combined: false)
     if combined
-      # Treat all segments as one document
-      sorted = @segments.sort_by { |s| s[:beg] }
+      return {} if @segments.empty?
 
-      return {} if sorted.empty?
+      # Group by file to calculate gaps within each file
+      files = {}
+      @segments.each do |x|
+        files[x[:file]] ||= []
+        files[x[:file]] << x
+      end
 
-      # Calculate segment lengths
-      lengths = sorted.map { |s| s[:end] - s[:beg] }
+      # Collect all segment lengths
+      all_lengths = @segments.map { |s| s[:end] - s[:beg] }
 
-      # Calculate gaps
-      gaps = []
-      sorted.each_cons(2) do |current, next_seg|
-        gap = next_seg[:beg] - current[:end]
-        gaps << gap if gap >= 0
+      # Collect all gaps (calculated within each file)
+      all_gaps = []
+      files.each do |file, segs|
+        sorted = segs.sort_by { |s| s[:beg] }
+        sorted.each_cons(2) do |current, next_seg|
+          gap = next_seg[:beg] - current[:end]
+          all_gaps << gap if gap >= 0
+        end
       end
 
       return {
         'combined' => {
-          avg_length: lengths.sum / lengths.length.to_f,
-          avg_gap: gaps.empty? ? 0.0 : gaps.sum / gaps.length.to_f,
-          count: sorted.length,
-          total_length: lengths.sum
+          avg_length: all_lengths.sum / all_lengths.length.to_f,
+          avg_gap: all_gaps.empty? ? 0.0 : all_gaps.sum / all_gaps.length.to_f,
+          count: @segments.length,
+          total_length: all_lengths.sum
         }
       }
     end

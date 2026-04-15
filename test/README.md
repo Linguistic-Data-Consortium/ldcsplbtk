@@ -62,7 +62,7 @@ Unit tests for segment statistics functionality:
 - average_segment_length
 - average_segment_gap
 - segment_statistics (comprehensive stats, per-file mode)
-- segment_statistics with combined mode (treat all segments as single document)
+- segment_statistics with combined mode (calculate averages across all segments, gaps within file boundaries)
 - Edge cases (single segment, overlapping segments, multiple files, empty sample)
 
 ### test_merge_segments.rb

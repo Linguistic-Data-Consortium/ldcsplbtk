@@ -24,7 +24,7 @@
   - Average gap between consecutive segments
   - Total number of segments
   - Total duration of all segments
-  - **New**: `--combined` / `-c` flag to treat all segments as single document (ignores file column)
+  - **New**: `--combined` / `-c` flag to calculate averages across all segments (gaps still within file boundaries)
 - Added 3 new methods to `Sample` class:
   - `average_segment_length()` - Per-file average segment duration
   - `average_segment_gap()` - Per-file average gap between segments

@@ -99,13 +99,13 @@ file          segments  avg_length  avg_gap  total_length
 interview.wav 3         1.667       0.0      5.0
 ```
 
-With `--combined` flag, all segments are treated as a single document (ignoring the file column):
+With `--combined` flag, statistics are calculated across all segments:
 ```
 file          segments  avg_length  avg_gap  total_length
 combined      8         1.450       0.325    11.6
 ```
 
-Gaps are calculated between consecutive segments (sorted by begin time). Overlapping segments result in negative gaps, which are excluded from the average.
+In combined mode, segment lengths are averaged across all segments, and gaps are averaged across all gaps (gaps are still calculated within each file, not across file boundaries). Overlapping segments result in negative gaps, which are excluded from the average.
 
 ## Segment Merging
 

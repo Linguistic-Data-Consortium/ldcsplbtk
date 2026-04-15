@@ -140,10 +140,10 @@ class TestSegmentStats < Minitest::Test
     # Lengths: 1.0, 1.0, 2.0, 2.0 -> avg = 6.0/4 = 1.5
     assert_in_delta 1.5, combined_stats[:avg_length], 0.01
 
-    # Sorted by beg: (0.0-1.0), (0.0-2.0), (1.5-2.5), (3.0-5.0)
-    # Gaps: -1.0 (excluded), -0.5 (excluded), 0.5 (included)
-    # avg_gap = 0.5/1 = 0.5
-    assert_in_delta 0.5, combined_stats[:avg_gap], 0.01
+    # Gaps within file1: 1.5-1.0 = 0.5
+    # Gaps within file2: 3.0-2.0 = 1.0
+    # All gaps: [0.5, 1.0] -> avg = 1.5/2 = 0.75
+    assert_in_delta 0.75, combined_stats[:avg_gap], 0.01
 
     # Total: 1.0 + 1.0 + 2.0 + 2.0 = 6.0
     assert_in_delta 6.0, combined_stats[:total_length], 0.01
