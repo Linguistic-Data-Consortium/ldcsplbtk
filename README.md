@@ -96,6 +96,39 @@ interview.wav 3         1.667       0.0      5.0
 
 Gaps are calculated between consecutive segments (sorted by begin time). Overlapping segments result in negative gaps, which are excluded from the average.
 
+## Segment Merging
+
+The `merge_segments.rb` script merges consecutive transcript segments when the gap between them is below a specified threshold:
+
+```bash
+# Merge segments with gaps less than 0.5 seconds
+bin/merge_segments.rb 0.5 transcript.tsv > merged.tsv
+
+# Merge segments with gaps less than 1.0 seconds
+bin/merge_segments.rb 1.0 input.json > merged.tsv
+```
+
+Behavior:
+- **Merges consecutive segments** within the same file when gap < threshold
+- **Preserves speaker boundaries** - only merges segments with the same speaker
+- **Does NOT merge across different source files** - each file is processed independently
+- Segments are sorted by begin time before merging
+- Merged segments combine their text with spaces
+
+Example:
+```
+# Input with small gaps
+file          beg  end  text
+interview.wav 0.0  1.0  hello
+interview.wav 1.2  2.0  world
+interview.wav 5.0  6.0  test
+
+# Output with threshold 0.5 (gap 0.2 < 0.5, gap 3.0 >= 0.5)
+file          beg  end  text
+interview.wav 0.0  2.0  hello world
+interview.wav 5.0  6.0  test
+```
+
 # Testing
 
 The toolkit includes a comprehensive test suite using Minitest. To run the tests:
@@ -105,13 +138,13 @@ rake test
 ```
 
 The test suite includes:
-- **Unit tests** for the `Sample` class (32 tests, 187 assertions)
-- **Integration tests** for command-line scripts (17 tests, 78 assertions)
+- **Unit tests** for the `Sample` class (44 tests, 224 assertions)
+- **Integration tests** for command-line scripts (17 tests, 48 assertions)
 - **Comprehensive format coverage:**
   - TSV (basic, with speaker, with section)
   - CTM (NIST format)
   - JSON formats: Whisper, Whisper.cpp, Rev.ai, Google Cloud v1 & v2, IBM Watson, Azure
-- Utility method tests (unintelligible counting, speaker normalization, overlap detection, etc.)
+- Utility method tests (unintelligible counting, speaker normalization, overlap detection, segment merging, etc.)
 
 See `test/README.md` for detailed testing documentation.
 

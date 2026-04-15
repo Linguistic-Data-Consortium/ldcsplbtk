@@ -2,6 +2,22 @@
 
 ## New Features
 
+### Segment Merging Script
+- **Added `merge_segments.rb`** - Merge consecutive transcript segments when gap is below threshold:
+  - Takes threshold (seconds) and input file as arguments
+  - Merges segments within same file when gap < threshold
+  - Preserves speaker boundaries (only merges same speaker)
+  - Does NOT merge across different source files
+  - Outputs merged segments in TSV format to stdout
+- Added `merge_segments(threshold:)` method to `Sample` class
+- Added 12 comprehensive tests covering:
+  - Basic merging with various thresholds
+  - Threshold boundary conditions
+  - Multi-file handling (no cross-file merging)
+  - Speaker diarization (no cross-speaker merging)
+  - Edge cases (single segment, empty sample, zero threshold)
+  - Complex multi-file, multi-speaker scenarios
+
 ### Segment Statistics Script
 - **Added `segment_stats.rb`** - Calculate statistics about segment durations and gaps:
   - Average segment length

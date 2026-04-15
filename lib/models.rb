@@ -845,5 +845,59 @@ class Sample
     result
   end
 
+  # Merge consecutive segments when gap is below threshold.
+  # Only merges segments from the same file with the same speaker (if present).
+  #
+  # @param threshold [Float] Maximum gap in seconds to allow merging
+  # @return [Sample] New Sample with merged segments
+  def merge_segments(threshold:)
+    # Group segments by file
+    files = {}
+    @segments.each do |x|
+      files[x[:file]] ||= []
+      files[x[:file]] << x
+    end
+
+    merged_sample = Sample.new
+    merged_sample.set_header(@header_array)
+
+    files.each do |file, segs|
+      # Sort segments by begin time
+      sorted = segs.sort_by { |s| s[:beg] }
+      next if sorted.empty?
+
+      # Start with first segment
+      current_merged = sorted.first.dup
+
+      sorted[1..-1].each do |seg|
+        gap = seg[:beg] - current_merged[:end]
+
+        # Check if we should merge:
+        # 1. Gap must be less than threshold
+        # 2. Speaker must match (if speaker field exists)
+        should_merge = gap < threshold
+
+        if @header_array.include?('speaker')
+          should_merge = should_merge && (seg[:speaker] == current_merged[:speaker])
+        end
+
+        if should_merge
+          # Merge: extend end time and concatenate text
+          current_merged[:end] = seg[:end]
+          current_merged[:text] = "#{current_merged[:text]} #{seg[:text]}"
+        else
+          # Don't merge: save current merged segment and start new one
+          merged_sample.segments << current_merged
+          current_merged = seg.dup
+        end
+      end
+
+      # Don't forget the last segment
+      merged_sample.segments << current_merged
+    end
+
+    merged_sample
+  end
+
 end
 

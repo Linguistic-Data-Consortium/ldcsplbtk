@@ -55,6 +55,7 @@ Integration tests for the command-line scripts in `bin/`:
 - text_only.rb
 - print_files.rb
 - segment_stats.rb
+- merge_segments.rb
 
 ### test_segment_stats.rb
 Unit tests for segment statistics functionality:
@@ -62,6 +63,17 @@ Unit tests for segment statistics functionality:
 - average_segment_gap
 - segment_statistics (comprehensive stats)
 - Edge cases (single segment, overlapping segments, multiple files)
+
+### test_merge_segments.rb
+Unit tests for segment merging functionality:
+- Basic merging with various thresholds
+- Threshold boundary conditions
+- Multi-file handling (no cross-file merging)
+- Speaker diarization (no cross-speaker merging)
+- Edge cases (single segment, empty sample, zero threshold)
+- Partial merging scenarios
+- Header preservation
+- Complex multi-file, multi-speaker scenarios
 
 ### test_combine_options.rb
 Tests for combine.rb command-line options:
