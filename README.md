@@ -74,6 +74,28 @@ bin/combine.rb --keep-ext hamlet.tsv lincoln.tsv > hamlin.tsv
 bin/combine.rb -k hamlet.tsv lincoln.tsv > hamlin.tsv
 ```
 
+## Segment Statistics
+
+The `segment_stats.rb` script calculates statistics about segment durations and gaps:
+
+```bash
+bin/segment_stats.rb transcript.tsv
+```
+
+Output includes per-file statistics:
+- **segments**: Number of segments
+- **avg_length**: Average segment duration in seconds
+- **avg_gap**: Average gap between consecutive segments in seconds
+- **total_length**: Total duration of all segments in seconds
+
+Example output:
+```
+file          segments  avg_length  avg_gap  total_length
+interview.wav 3         1.667       0.0      5.0
+```
+
+Gaps are calculated between consecutive segments (sorted by begin time). Overlapping segments result in negative gaps, which are excluded from the average.
+
 # Testing
 
 The toolkit includes a comprehensive test suite using Minitest. To run the tests:
@@ -83,8 +105,8 @@ rake test
 ```
 
 The test suite includes:
-- **Unit tests** for the `Sample` class (26 tests, 164 assertions)
-- **Integration tests** for command-line scripts (16 tests, 72 assertions)
+- **Unit tests** for the `Sample` class (32 tests, 187 assertions)
+- **Integration tests** for command-line scripts (17 tests, 78 assertions)
 - **Comprehensive format coverage:**
   - TSV (basic, with speaker, with section)
   - CTM (NIST format)

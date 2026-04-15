@@ -769,5 +769,81 @@ class Sample
     overlap
   end
 
+  # Calculate average segment length per file.
+  # @return [Hash] Map of filename to average segment duration in seconds
+  def average_segment_length
+    files = {}
+    @segments.each do |x|
+      files[x[:file]] ||= []
+      files[x[:file]] << (x[:end] - x[:beg])
+    end
+
+    result = {}
+    files.each do |file, durations|
+      result[file] = durations.sum / durations.length.to_f
+    end
+    result
+  end
+
+  # Calculate average gap between consecutive segments per file.
+  # Gaps are calculated only between consecutive segments within the same file.
+  # @return [Hash] Map of filename to average gap duration in seconds
+  def average_segment_gap
+    files = {}
+    @segments.each do |x|
+      files[x[:file]] ||= []
+      files[x[:file]] << x
+    end
+
+    result = {}
+    files.each do |file, segs|
+      # Sort segments by begin time
+      sorted = segs.sort_by { |s| s[:beg] }
+      gaps = []
+
+      sorted.each_cons(2) do |current, next_seg|
+        gap = next_seg[:beg] - current[:end]
+        gaps << gap if gap >= 0
+      end
+
+      result[file] = gaps.empty? ? 0.0 : gaps.sum / gaps.length.to_f
+    end
+    result
+  end
+
+  # Calculate comprehensive segment statistics per file.
+  # @return [Hash] Map of filename to stats hash with :avg_length, :avg_gap, :count
+  def segment_statistics
+    files = {}
+    @segments.each do |x|
+      files[x[:file]] ||= []
+      files[x[:file]] << x
+    end
+
+    result = {}
+    files.each do |file, segs|
+      # Sort segments by begin time
+      sorted = segs.sort_by { |s| s[:beg] }
+
+      # Calculate segment lengths
+      lengths = sorted.map { |s| s[:end] - s[:beg] }
+
+      # Calculate gaps
+      gaps = []
+      sorted.each_cons(2) do |current, next_seg|
+        gap = next_seg[:beg] - current[:end]
+        gaps << gap if gap >= 0
+      end
+
+      result[file] = {
+        avg_length: lengths.sum / lengths.length.to_f,
+        avg_gap: gaps.empty? ? 0.0 : gaps.sum / gaps.length.to_f,
+        count: segs.length,
+        total_length: lengths.sum
+      }
+    end
+    result
+  end
+
 end
 

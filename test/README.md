@@ -54,6 +54,20 @@ Integration tests for the command-line scripts in `bin/`:
 - split.rb
 - text_only.rb
 - print_files.rb
+- segment_stats.rb
+
+### test_segment_stats.rb
+Unit tests for segment statistics functionality:
+- average_segment_length
+- average_segment_gap
+- segment_statistics (comprehensive stats)
+- Edge cases (single segment, overlapping segments, multiple files)
+
+### test_combine_options.rb
+Tests for combine.rb command-line options:
+- --strip-ext / -s flag
+- --keep-ext / -k flag
+- Multiple file handling with options
 
 ### fixtures/
 Sample data files used for testing:

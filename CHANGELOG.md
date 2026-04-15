@@ -2,6 +2,19 @@
 
 ## New Features
 
+### Segment Statistics Script
+- **Added `segment_stats.rb`** - Calculate statistics about segment durations and gaps:
+  - Average segment length
+  - Average gap between consecutive segments
+  - Total number of segments
+  - Total duration of all segments
+- Added 3 new methods to `Sample` class:
+  - `average_segment_length()` - Per-file average segment duration
+  - `average_segment_gap()` - Per-file average gap between segments
+  - `segment_statistics()` - Comprehensive stats (combines all metrics)
+- Added 7 new tests (6 unit tests + 1 integration test)
+- Handles multiple files, overlapping segments, and edge cases
+
 ### File Extension Control in combine.rb
 - **Added command-line flags** to control file extension handling in `combine.rb`:
   - `--strip-ext` / `-s`: Strip file extensions from first column (default behavior)

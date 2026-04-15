@@ -1,0 +1,6 @@
+file	beg	end	text
+test.wav	0.0	1.0	hello
+test.wav	2.0	4.0	world
+test.wav	5.0	6.0	test
+other.wav	0.0	2.0	foo
+other.wav	3.0	5.0	bar

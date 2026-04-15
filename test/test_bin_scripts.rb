@@ -116,4 +116,15 @@ class TestBinScripts < Minitest::Test
     Dir.glob("#{temp_dir}/*.txt").each { |f| File.delete(f) }
     Dir.rmdir(temp_dir)
   end
+
+  def test_segment_stats_script
+    result = `ruby #{@bin_dir}/segment_stats.rb #{fixture_path('speaker.tsv')}`
+
+    assert $?.success?
+    assert_match /file\tsegments\tavg_length\tavg_gap\ttotal_length/, result
+    assert_match /interview/, result
+
+    lines = result.split("\n")
+    assert_equal 2, lines.length  # Header + 1 data line
+  end
 end
