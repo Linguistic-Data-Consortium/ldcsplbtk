@@ -405,9 +405,10 @@ class Sample
 
   public
 
-  def print_prep(norm: false, after_time: nil, after_time_with_map: nil)
+  def print_prep(norm: false, after_time: nil, after_time_with_map: nil, strip_extensions: true)
     @segments.each do |x|
-      x[:file] = x[:file].sub(/^.+\//, '').sub /\.\w+$/, ''
+      x[:file] = x[:file].sub(/^.+\//, '')
+      x[:file] = x[:file].sub(/\.\w+$/, '') if strip_extensions
       x[:text] = norm x[:text] if norm
     end
     puts @header_string
@@ -420,8 +421,8 @@ class Sample
     end
   end
 
-  def print(norm: false, after_time: nil, after_time_with_map: nil)
-    segments = print_prep(norm: , after_time: , after_time_with_map: )
+  def print(norm: false, after_time: nil, after_time_with_map: nil, strip_extensions: true)
+    segments = print_prep(norm: , after_time: , after_time_with_map: , strip_extensions: )
     puts segments.map { |x| segment2line x }
   end
 

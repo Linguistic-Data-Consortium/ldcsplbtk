@@ -1,5 +1,14 @@
 # Changelog
 
+## New Features
+
+### File Extension Control in combine.rb
+- **Added command-line flags** to control file extension handling in `combine.rb`:
+  - `--strip-ext` / `-s`: Strip file extensions from first column (default behavior)
+  - `--keep-ext` / `-k`: Keep file extensions in first column
+- Maintains backward compatibility (extensions still stripped by default)
+- Added 6 new tests to verify flag behavior
+
 ## Improvements (Current)
 
 ### Critical Bug Fixes

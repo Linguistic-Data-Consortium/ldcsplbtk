@@ -24,7 +24,7 @@ The command
 
     bin/combine.rb hamlet.tsv lincoln.tsv > hamlin.tsv
 
-would produce a file `hamlin.tsv` like this:
+would produce a file `hamlin.tsv` like this (note: file extensions are stripped by default):
 
     file    beg end text
     hamlet.wav  1.1 2.2 to be
@@ -60,6 +60,20 @@ where the ordering of the transcripts is based on the sorted order of the argume
 
 would produce identical output (assuming only two inputs).  This produces consistent output without sorting the transcript segments themselves which might be undesirable.  Finally, the inputs can be different formats, but they must be consistent, where consistency here means having the same fields.  For example, combining TSVs that have a different number of columns will fail, even if they might seem compatible.  This is a safeguard against combining transcripts that are truly incompatible by accident; the user must take extra steps to create consistency.
 
+## File Extension Handling
+
+By default, `combine.rb` strips file extensions from the first column. You can control this behavior with command-line flags:
+
+```bash
+# Strip extensions (default behavior)
+bin/combine.rb hamlet.tsv lincoln.tsv > hamlin.tsv
+bin/combine.rb --strip-ext hamlet.tsv lincoln.tsv > hamlin.tsv
+
+# Keep extensions
+bin/combine.rb --keep-ext hamlet.tsv lincoln.tsv > hamlin.tsv
+bin/combine.rb -k hamlet.tsv lincoln.tsv > hamlin.tsv
+```
+
 # Testing
 
 The toolkit includes a comprehensive test suite using Minitest. To run the tests:
@@ -69,8 +83,8 @@ rake test
 ```
 
 The test suite includes:
-- **Unit tests** for the `Sample` class (26 tests, 166 assertions)
-- **Integration tests** for command-line scripts (10 tests, 41 assertions)
+- **Unit tests** for the `Sample` class (26 tests, 164 assertions)
+- **Integration tests** for command-line scripts (16 tests, 72 assertions)
 - **Comprehensive format coverage:**
   - TSV (basic, with speaker, with section)
   - CTM (NIST format)
