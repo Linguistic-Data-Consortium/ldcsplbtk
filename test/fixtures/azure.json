@@ -1,0 +1,42 @@
+{
+  "source": "example.wav",
+  "recognizedPhrases": [
+    {
+      "speaker": 1,
+      "nBest": [
+        {
+          "confidence": 0.95,
+          "lexical": "hello world",
+          "words": [
+            {
+              "word": "Hello",
+              "offsetMilliseconds": 0,
+              "durationMilliseconds": 1000
+            },
+            {
+              "word": "world",
+              "offsetMilliseconds": 1000,
+              "durationMilliseconds": 1500
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "speaker": 2,
+      "nBest": [
+        {
+          "confidence": 0.90,
+          "lexical": "test",
+          "words": [
+            {
+              "word": "test",
+              "offsetMilliseconds": 2500,
+              "durationMilliseconds": 1000
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

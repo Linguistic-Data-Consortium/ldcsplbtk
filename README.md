@@ -58,5 +58,24 @@ where the ordering of the transcripts is based on the sorted order of the argume
     bin/combine.rb lincoln.tsv hamlet.tsv
     bin/combine.rb *.tsv
 
-would produce identical output (assuming only two inputs).  This produces consistent output without sorting the transcript segments themselves which might be undesirable.  Finally, the inputs can be different formats, but they must be consistent, where consistency here means having the same fields.  For example, combining TSVs that have a different number of columns will fail, even if they might seem compatible.  This is a safeguard against combining transcripts that are truly incompatible by accident; the user must take extra steps to create consistency.  See section ...
+would produce identical output (assuming only two inputs).  This produces consistent output without sorting the transcript segments themselves which might be undesirable.  Finally, the inputs can be different formats, but they must be consistent, where consistency here means having the same fields.  For example, combining TSVs that have a different number of columns will fail, even if they might seem compatible.  This is a safeguard against combining transcripts that are truly incompatible by accident; the user must take extra steps to create consistency.
+
+# Testing
+
+The toolkit includes a comprehensive test suite using Minitest. To run the tests:
+
+```bash
+rake test
+```
+
+The test suite includes:
+- **Unit tests** for the `Sample` class (26 tests, 121 assertions)
+- **Integration tests** for command-line scripts (10 tests, 41 assertions)
+- **Comprehensive format coverage:**
+  - TSV (basic, with speaker, with section)
+  - CTM (NIST format)
+  - JSON formats: Whisper, Whisper.cpp, Rev.ai, Google Cloud v2, IBM Watson, Azure
+- Utility method tests (unintelligible counting, speaker normalization, overlap detection, etc.)
+
+See `test/README.md` for detailed testing documentation.
 

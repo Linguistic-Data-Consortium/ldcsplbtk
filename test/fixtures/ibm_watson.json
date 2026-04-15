@@ -1,0 +1,32 @@
+{
+  "audio_metrics": {
+    "sampling_rate": 16000
+  },
+  "results": [
+    {
+      "alternatives": [
+        {
+          "transcript": "Hello world",
+          "timestamps": [
+            ["Hello", 0.0, 1.0],
+            ["world", 1.0, 2.5]
+          ]
+        }
+      ]
+    },
+    {
+      "alternatives": [
+        {
+          "transcript": "test",
+          "timestamps": [
+            ["test", 2.5, 3.5]
+          ]
+        }
+      ]
+    }
+  ],
+  "speaker_labels": [
+    {"from": 0.0, "to": 2.5, "speaker": 0, "confidence": 0.95},
+    {"from": 2.5, "to": 3.5, "speaker": 1, "confidence": 0.90}
+  ]
+}

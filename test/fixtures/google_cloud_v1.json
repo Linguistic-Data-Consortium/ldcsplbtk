@@ -1,0 +1,32 @@
+{
+  "results": [
+    {
+      "alternatives": [
+        {
+          "transcript": "Hello world test",
+          "confidence": 0.95,
+          "words": [
+            {
+              "word": "Hello",
+              "startTime": {"seconds": 0, "nanos": 0},
+              "endTime": {"seconds": 1, "nanos": 0},
+              "speakerTag": 1
+            },
+            {
+              "word": "world",
+              "startTime": {"seconds": 1, "nanos": 0},
+              "endTime": {"seconds": 2, "nanos": 500000000},
+              "speakerTag": 1
+            },
+            {
+              "word": "test",
+              "startTime": {"seconds": 2, "nanos": 500000000},
+              "endTime": {"seconds": 3, "nanos": 500000000},
+              "speakerTag": 2
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

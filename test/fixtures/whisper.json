@@ -1,0 +1,24 @@
+{
+  "segments": [
+    {
+      "start": 0.0,
+      "end": 2.5,
+      "text": " Hello world",
+      "words": [
+        {"start": 0.0, "end": 1.0, "word": "Hello"},
+        {"start": 1.0, "end": 2.5, "word": "world"}
+      ]
+    },
+    {
+      "start": 2.5,
+      "end": 5.0,
+      "text": " This is a test",
+      "words": [
+        {"start": 2.5, "end": 3.0, "word": "This"},
+        {"start": 3.0, "end": 3.5, "word": "is"},
+        {"start": 3.5, "end": 4.0, "word": "a"},
+        {"start": 4.0, "end": 5.0, "word": "test"}
+      ]
+    }
+  ]
+}

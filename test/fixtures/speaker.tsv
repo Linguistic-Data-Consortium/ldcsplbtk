@@ -1,0 +1,4 @@
+file	beg	end	text	speaker
+interview.wav	0.0	1.5	hello there	spk1
+interview.wav	1.5	3.0	how are you	spk2
+interview.wav	3.0	5.0	doing great	spk1

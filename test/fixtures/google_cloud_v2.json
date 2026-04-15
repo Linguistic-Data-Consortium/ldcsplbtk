@@ -1,0 +1,42 @@
+{
+  "results": [
+    {
+      "alternatives": [
+        {
+          "transcript": "Hello world",
+          "confidence": 0.95,
+          "words": [
+            {
+              "word": "Hello",
+              "startOffset": "0.0s",
+              "endOffset": "1.0s",
+              "speakerLabel": "1"
+            },
+            {
+              "word": "world",
+              "startOffset": "1.0s",
+              "endOffset": "2.5s",
+              "speakerLabel": "1"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "alternatives": [
+        {
+          "transcript": "test",
+          "confidence": 0.90,
+          "words": [
+            {
+              "word": "test",
+              "startOffset": "2.5s",
+              "endOffset": "3.5s",
+              "speakerLabel": "2"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

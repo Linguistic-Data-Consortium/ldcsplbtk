@@ -1,0 +1,4 @@
+file	beg	end	text
+test.wav	0.0	1.0	hello ((unintelligible)) world
+test.wav	1.0	2.0	((noise)) this is ((unclear))
+test.wav	2.0	3.0	clear text here
