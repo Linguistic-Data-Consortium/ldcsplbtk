@@ -812,8 +812,36 @@ class Sample
   end
 
   # Calculate comprehensive segment statistics per file.
+  # @param combined [Boolean] If true, treat all segments as single document (ignore file column)
   # @return [Hash] Map of filename to stats hash with :avg_length, :avg_gap, :count
-  def segment_statistics
+  def segment_statistics(combined: false)
+    if combined
+      # Treat all segments as one document
+      sorted = @segments.sort_by { |s| s[:beg] }
+
+      return {} if sorted.empty?
+
+      # Calculate segment lengths
+      lengths = sorted.map { |s| s[:end] - s[:beg] }
+
+      # Calculate gaps
+      gaps = []
+      sorted.each_cons(2) do |current, next_seg|
+        gap = next_seg[:beg] - current[:end]
+        gaps << gap if gap >= 0
+      end
+
+      return {
+        'combined' => {
+          avg_length: lengths.sum / lengths.length.to_f,
+          avg_gap: gaps.empty? ? 0.0 : gaps.sum / gaps.length.to_f,
+          count: sorted.length,
+          total_length: lengths.sum
+        }
+      }
+    end
+
+    # Original per-file behavior
     files = {}
     @segments.each do |x|
       files[x[:file]] ||= []

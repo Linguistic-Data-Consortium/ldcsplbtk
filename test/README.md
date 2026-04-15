@@ -61,8 +61,9 @@ Integration tests for the command-line scripts in `bin/`:
 Unit tests for segment statistics functionality:
 - average_segment_length
 - average_segment_gap
-- segment_statistics (comprehensive stats)
-- Edge cases (single segment, overlapping segments, multiple files)
+- segment_statistics (comprehensive stats, per-file mode)
+- segment_statistics with combined mode (treat all segments as single document)
+- Edge cases (single segment, overlapping segments, multiple files, empty sample)
 
 ### test_merge_segments.rb
 Unit tests for segment merging functionality:

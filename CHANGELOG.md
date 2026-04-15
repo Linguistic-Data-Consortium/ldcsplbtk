@@ -24,11 +24,12 @@
   - Average gap between consecutive segments
   - Total number of segments
   - Total duration of all segments
+  - **New**: `--combined` / `-c` flag to treat all segments as single document (ignores file column)
 - Added 3 new methods to `Sample` class:
   - `average_segment_length()` - Per-file average segment duration
   - `average_segment_gap()` - Per-file average gap between segments
-  - `segment_statistics()` - Comprehensive stats (combines all metrics)
-- Added 7 new tests (6 unit tests + 1 integration test)
+  - `segment_statistics(combined: false)` - Comprehensive stats (combines all metrics)
+- Added 11 tests (9 unit tests + 2 integration tests)
 - Handles multiple files, overlapping segments, and edge cases
 
 ### File Extension Control in combine.rb

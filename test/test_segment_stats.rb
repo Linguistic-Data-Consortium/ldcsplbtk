@@ -117,4 +117,64 @@ class TestSegmentStats < Minitest::Test
     # Since gap is -1.0 (next starts at 1.0, current ends at 2.0), no valid gaps
     assert_equal 0.0, stats['test.wav'][:avg_gap]
   end
+
+  def test_segment_statistics_combined_mode
+    tsv_content = <<~TSV
+      file\tbeg\tend\ttext
+      file1.wav\t0.0\t1.0\thello
+      file1.wav\t1.5\t2.5\tworld
+      file2.wav\t0.0\t2.0\tfoo
+      file2.wav\t3.0\t5.0\tbar
+    TSV
+    @sample.init_from(string: tsv_content)
+
+    stats = @sample.segment_statistics(combined: true)
+
+    # Should have single 'combined' entry
+    assert_equal 1, stats.keys.length
+    assert stats['combined']
+
+    combined_stats = stats['combined']
+    assert_equal 4, combined_stats[:count]
+
+    # Lengths: 1.0, 1.0, 2.0, 2.0 -> avg = 6.0/4 = 1.5
+    assert_in_delta 1.5, combined_stats[:avg_length], 0.01
+
+    # Sorted by beg: (0.0-1.0), (0.0-2.0), (1.5-2.5), (3.0-5.0)
+    # Gaps: -1.0 (excluded), -0.5 (excluded), 0.5 (included)
+    # avg_gap = 0.5/1 = 0.5
+    assert_in_delta 0.5, combined_stats[:avg_gap], 0.01
+
+    # Total: 1.0 + 1.0 + 2.0 + 2.0 = 6.0
+    assert_in_delta 6.0, combined_stats[:total_length], 0.01
+  end
+
+  def test_segment_statistics_combined_mode_single_file
+    tsv_content = <<~TSV
+      file\tbeg\tend\ttext
+      test.wav\t0.0\t1.0\thello
+      test.wav\t2.0\t4.0\tworld
+      test.wav\t5.0\t6.0\ttest
+    TSV
+    @sample.init_from(string: tsv_content)
+
+    stats = @sample.segment_statistics(combined: true)
+
+    assert_equal 1, stats.keys.length
+    assert stats['combined']
+
+    combined_stats = stats['combined']
+    assert_equal 3, combined_stats[:count]
+    assert_in_delta 1.333, combined_stats[:avg_length], 0.01
+    assert_in_delta 1.0, combined_stats[:avg_gap], 0.01
+    assert_in_delta 4.0, combined_stats[:total_length], 0.01
+  end
+
+  def test_segment_statistics_combined_mode_empty
+    @sample.set_header(['file', 'beg', 'end', 'text'])
+
+    stats = @sample.segment_statistics(combined: true)
+
+    assert_equal 0, stats.keys.length
+  end
 end

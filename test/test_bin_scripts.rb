@@ -127,4 +127,21 @@ class TestBinScripts < Minitest::Test
     lines = result.split("\n")
     assert_equal 2, lines.length  # Header + 1 data line
   end
+
+  def test_segment_stats_script_combined_mode
+    # Test with gaps.tsv which has multiple files
+    result = `ruby #{@bin_dir}/segment_stats.rb --combined #{fixture_path('gaps.tsv')}`
+
+    assert $?.success?
+    assert_match /file\tsegments\tavg_length\tavg_gap\ttotal_length/, result
+    assert_match /combined/, result
+
+    lines = result.split("\n")
+    assert_equal 2, lines.length  # Header + 1 combined data line
+
+    # Test short flag
+    result = `ruby #{@bin_dir}/segment_stats.rb -c #{fixture_path('gaps.tsv')}`
+    assert $?.success?
+    assert_match /combined/, result
+  end
 end
