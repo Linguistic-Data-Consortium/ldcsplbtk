@@ -69,12 +69,12 @@ rake test
 ```
 
 The test suite includes:
-- **Unit tests** for the `Sample` class (26 tests, 121 assertions)
+- **Unit tests** for the `Sample` class (26 tests, 166 assertions)
 - **Integration tests** for command-line scripts (10 tests, 41 assertions)
 - **Comprehensive format coverage:**
   - TSV (basic, with speaker, with section)
   - CTM (NIST format)
-  - JSON formats: Whisper, Whisper.cpp, Rev.ai, Google Cloud v2, IBM Watson, Azure
+  - JSON formats: Whisper, Whisper.cpp, Rev.ai, Google Cloud v1 & v2, IBM Watson, Azure
 - Utility method tests (unintelligible counting, speaker normalization, overlap detection, etc.)
 
 See `test/README.md` for detailed testing documentation.

@@ -1,33 +1,68 @@
 require 'json'
 
-# a uniform set of segments
+# Represents a collection of speech transcript segments with uniform schema.
+#
+# Supports parsing multiple input formats:
+# - TSV (tab-separated values) with various column configurations
+# - CTM (NIST Conversation Time Marked format)
+# - JSON formats from major ASR vendors:
+#   - Rev.ai, Whisper, Whisper.cpp
+#   - Google Cloud Speech-to-Text (v1 and v2)
+#   - IBM Watson Speech-to-Text
+#   - Microsoft Azure Speech Services
+#
+# All formats are normalized to a consistent internal representation with
+# fields: file, beg (begin time), end (end time), text, and optionally
+# speaker and section.
+#
+# Example:
+#   sample = Sample.new
+#   sample.init_from(string: File.read('transcript.tsv'))
+#   sample.print  # Output as TSV
+#   puts sample.stm  # Convert to STM format
 class Sample
+  # Minimum speech duration threshold in seconds for speech activity detection
+  SPEECH_DURATION_THRESHOLD = 5 * 60  # 5 minutes
 
-  attr_accessor :header_array, :segments, :durations
+  # @return [Array<String>] Column names for the current format
+  attr_accessor :header_array
+
+  # @return [Array<Hash>] Transcript segments with :file, :beg, :end, :text, etc.
+  attr_accessor :segments
+
+  # @return [Hash, nil] Optional duration mappings for files
+  attr_accessor :durations
 
   def initialize
     @segments = []
   end
 
+  # Set the header columns for this sample.
+  # @param x [Array<String>] Column names (e.g., ['file', 'beg', 'end', 'text'])
   def set_header(x)
     @header_array = x
     @header_string = @header_array.join "\t"
   end
 
+  # Initialize sample from a string in any supported format.
+  # Automatically detects the format (TSV, CTM, or JSON) and parses accordingly.
+  #
+  # @param string [String] The input data to parse
+  # @param fn [String, nil] Optional filename for formats that don't include it
+  # @return [Sample] Returns self for method chaining
+  # @raise [RuntimeError] If format is unknown or sample is already initialized
   def init_from(string:, fn: nil)
     @fn = fn
     raise "already initialized" if @segments.length > 0
     @header = false
     case string
     when /^\S+ 1 / # assume ctm
-      # @format = :ctm
       set_header %w[ file beg end text ]
       lines = string.lines.map(&:chomp)
       lines.each do |line|
         add_segment_from_ctm line:
       end
     when /^\w/ # assume tsv
-      # @format = :tsv
       lines = string.lines.map(&:chomp)
       check_header lines.first
       add_segment_from_tsv line: lines.first if !@header
@@ -49,14 +84,11 @@ class Sample
   def check_header(line)
     case line
     when /^file\tbeg\tend\ttext(\tspeaker(\tsection)?)?\z/
-      # @header_string = header
-      # @header_string.split "\t"
       @header_string = line
       @header = true
       @header_array = @header_string.split "\t"
     when "start\tend\ttext"
       raise "the file name must be set" if @fn.nil?
-      # @format = :whisper
       @header = true
       set_header %w[ file beg end text ]
     else
@@ -85,6 +117,11 @@ class Sample
     end
   end
 
+  # Combine another sample into this one.
+  # Headers must match exactly or an error is raised.
+  #
+  # @param other_sample [Sample] The sample to merge into this one
+  # @raise [RuntimeError] If headers don't match
   def add(other_sample:)
     if @header_array
       raise "headers don't match" if other_sample.header_array != @header_array
@@ -96,22 +133,6 @@ class Sample
       @segments << x
     end
   end
-
-  # # add while checking format
-  # def add_from_string(fn:, string:)
-  #   case @format
-  #   when :rev, :google, :ibm, :azure
-  #     add_object fn:, object: JSON.parse(string)
-  #   else
-  #     string.lines.map(&:chomp).each_with_index do |line, i|
-  #       if @header and i == 0
-  #         raise "bad header: #{line}" if line != @header_string
-  #       else
-  #         add_segment_from_line fn:, line:
-  #       end
-  #     end
-  #   end
-  # end
 
   def add_segment_from_ctm(line:)
     a = line.split
@@ -131,11 +152,10 @@ class Sample
     @segments << segment
   end
 
-  # assumes the line matches the header
-  # checks the number of fields, but that's it
+  # Assumes the line matches the header.
+  # Checks the number of fields, but that's it.
   def add_segment_from_tsv(line:)
     a = line.split "\t", -1
-    # a.unshift @fn if @format == :whisper or @sad
     if a.length != @header_array.length
       raise "bad line, #{a.length} columns: #{line.gsub "\t", "TAB"}"
     end
@@ -144,7 +164,6 @@ class Sample
       case k
       when 'beg', 'end'
         v = v.to_f
-        # v /= 1000 if @format == :whisper
       end
       segment[k.to_sym] = v
     end
@@ -155,236 +174,242 @@ class Sample
     x.gsub(/[-=#,.?()]/, '').gsub(/  +/, ' ').downcase
   end
 
+  # Parse a JSON object from various ASR vendors and add segments.
+  # Automatically detects the vendor format based on object structure.
+  #
+  # @param object [Hash] Parsed JSON object from ASR service
+  # @raise [RuntimeError] If format cannot be detected or filename not set
   def add_object(object:)
-    if object['monologues'] # assume rev
-      # @format = :rev
-      raise "the file name must be set" if @fn.nil?
-      set_header %w[ file beg end text speaker ]
-      # @header ||= %w[ file beg end text speaker ]
-      object['monologues'].each do |m|
-        speaker = m['speaker']
-        m['elements'].each do |e|
-          s = {}
-          if e['type'] == 'text'
-            s = {
-              file: @fn,
-              beg: e['ts'],
-              end: e['end_ts'],
-              text: e['value'],
-              speaker: speaker
-            }
-            @segments << s
-          end
-        end#.flatten.map { |x| norm x }
-      end
-    elsif object['audio_metrics'] # ibm, but only because I requested audio metrics
-      # @format = :ibm
-      raise "the file name must be set" if @fn.nil?
-      set_header %w[ file beg end text speaker ]
-      object['results'].each do |x|
-        x['alternatives'].first['timestamps'].each do |x|
-          next if x[0][0] == '%'
-          sp = ibmsp object['speaker_labels'], x[1], x[2]
-          s = {
-            file: @fn,
-            beg: x[1],
-            end: x[2],
-            text: x[0],
-            speaker: sp
-          }
-          @segments << s
-        end
-      end
-    elsif object['results'] # assume google cloud v2
-      a = object['results'].last['alternatives']
-      raise "the file name must be set" if @fn.nil?
-      set_header %w[ file beg end text speaker ]
-      object['results'].each do |r|
-        r['alternatives'].first['words'].each do |w|
-          s = {}
-          if true #e['type'] == 'text'
-            s = {
-              file: @fn,
-              beg: gctsv2(w['startOffset']),
-              end: gctsv2(w['endOffset']),
-              text: w['word'],
-              speaker: w['speakerLabel']
-            }
-            @segments << s
-          end
-        end
-      end
-    elsif object['results'] # assume google cloud v1
-      a = object['results'].last['alternatives']
-      if a.first.keys.length == 3
-        raise "unknown format; might be google cloud without speaker tags"
-      end
-      # @format = :google
-      raise "the file name must be set" if @fn.nil?
-      set_header %w[ file beg end text speaker ]
-      # @header ||= %w[ file beg end text speaker ]
-      a.first['words'].each do |w|
-        s = {}
-        if true #e['type'] == 'text'
-          s = {
-            file: @fn,
-            beg: gcts(w['startTime']),
-            end: gcts(w['endTime']),
-            text: w['word'],
-            speaker: w['speakerTag'] # what about speakerLabel?
-          }
-          @segments << s
-        end
-      end
-    elsif object['source'] # assume azure
-      raise "the file name must be set" if @fn.nil?
-      # @format = :azure
-      set_header %w[ file beg end text speaker ]
-      object['recognizedPhrases'].each do |x|
-        raise "what to do?" if x['nBest'].count != 1
-        sp = x['speaker'].to_s
-        x['nBest'].first['words'].each do |x|
-          s = {
-            file: @fn,
-            beg: (x['offsetMilliseconds'].to_f / 1000).round(3),
-            end: 0,
-            text: x['word'],
-            speaker: sp
-          }
-          s[:end] = (s[:beg] + (x['durationMilliseconds'].to_f / 1000)).round(3)
-          @segments << s
-        end
-      end
-    elsif object['segments'] # assume whisper
-      # @format = :whisper
-      raise "the file name must be set" if @fn.nil?
-      set_header %w[ file beg end text ]
-      # @header ||= %w[ file beg end text speaker ]
-      if object['segments'].first['words']
-        object['segments'].each do |m|
-          m['words'].each do |e|
-            s = {
-              file: @fn,
-              beg: e['start'],
-              end: e['end'],
-              text: e['word'].gsub(/\s/, '')
-            }
-            @segments << s
-          end
-        end
-      else
-        object['segments'].each do |m|
-          words = m['text'].split
-          bb = m['start']
-          inc = (m['end']-bb) / words.length
-          words.each_with_index do |e, i|
-            ee = bb + inc
-            s = {
-              file: @fn,
-              beg: bb.round(3),
-              end: ee.round(3),
-              text: e.gsub(/\s/, '')
-            }
-            @segments << s
-            bb = ee
-          end
-          @segments[-1][:end] = m['end']
-        end
-      end
-    elsif object['transcription'] # assume whisper.cpp
-      # @format = :whispercpp
-      raise "the file name must be set" if @fn.nil?
-      set_header %w[ file beg end text ]
-      # @header ||= %w[ file beg end text speaker ]
-      return if object['transcription'].length == 0
-      last = object['transcription'][0]['offsets']['from']
-      object['transcription'].each do |m|
-        next if m['text'].length == 0
-        # puts e['text']
-        bb = (m['offsets']['from'].to_f / 1000).round(3)
-        ee = (m['offsets']['to'].to_f / 1000).round(3)
-        tt = m['text']#.gsub(/\s|"/, '')
-        s = {
-          file: @fn,
-          beg: bb,
-          end: ee,
-          text: tt
-        }
-        @segments << s
-      end
-    elsif object['pred_text']
-      fn = object['audio_filepath']
-      last = `soxi -D /clinical/poetry/#{fn}`
-      set_header %w[ file beg end text ]
-      s = {
-        file: File.basename(fn, '.wav'),
-        beg: 0.0,
-        end: last.to_f,
-        text: object['pred_text']
-      }
-      @segments << s
-    # elsif object['transcription'] # assume whisper.cpp
-    #   @format = :whispercpp
-    #   raise "the file name must be set" if @fn.nil?
-    #   @header_array = %w[ file beg end text ]
-    #   @header_string = @header_array.join "\t"
-    #   # @header ||= %w[ file beg end text speaker ]
-    #   last = object['transcription'][0]['offsets']['from']
-    #   object['transcription'].each do |m|
-    #     if m['tokens'][0]['offsets']['from'] == 0
-    #       last = m['offsets']['from']
-    #     end
-    #     bbb = last
-    #     m['tokens'].each do |e|
-    #       # next if e['text'] =~ /\[/
-    #       # puts e['text']
-    #       bb = ((bbb+e['offsets']['from']).to_f / 1000).round(3)
-    #       ee = ((bbb+e['offsets']['to']).to_f / 1000).round(3)
-    #       tt = e['text'].gsub(/\s|"/, '')
-    #       case e['text'][0]
-    #       when ' '
-    #         s = {
-    #           file: @fn,
-    #           beg: bb,
-    #           end: ee,
-    #           text: tt
-    #         }
-    #         @segments << s
-    #       when /\w|'/
-    #         @segments[-1][:text] << tt
-    #         @segments[-1][:end] = ee
-    #       end
-    #     end
-    #   end
+    case
+    when object['monologues']
+      parse_rev(object)
+    when object['audio_metrics']
+      parse_ibm(object)
+    when object['results']
+      parse_google_cloud(object)
+    when object['source']
+      parse_azure(object)
+    when object['segments']
+      parse_whisper(object)
+    when object['transcription']
+      parse_whisper_cpp(object)
+    when object['pred_text']
+      parse_pred_text(object)
     else
-      raise "unknown format"
+      raise "Unknown JSON format: unable to detect ASR vendor"
     end
   end
 
-  def ibmsp(x, b, e)
-    # brute force! fix it someday
-    a = x.select { |y| b >= y['from'] and e <= y['to'] }
-    if a.count != 1
-      raise "what to do?"
+  private
+
+  def parse_rev(object)
+    raise "Filename must be set" if @fn.nil?
+    set_header %w[ file beg end text speaker ]
+    object['monologues'].each do |m|
+      speaker = m['speaker']
+      m['elements'].each do |e|
+        next unless e['type'] == 'text'
+        @segments << {
+          file: @fn,
+          beg: e['ts'],
+          end: e['end_ts'],
+          text: e['value'],
+          speaker: speaker
+        }
+      end
     end
-    a.first['speaker'].to_s
   end
 
-  def gcts(x)
-    x['nanos'].to_f / 1_000_000_000 + x['seconds'].to_f
+  def parse_ibm(object)
+    raise "Filename must be set" if @fn.nil?
+    set_header %w[ file beg end text speaker ]
+    object['results'].each do |result|
+      result['alternatives'].first['timestamps'].each do |timestamp|
+        next if timestamp[0][0] == '%'
+        word, beg_time, end_time = timestamp
+        speaker = find_ibm_speaker(object['speaker_labels'], beg_time, end_time)
+        @segments << {
+          file: @fn,
+          beg: beg_time,
+          end: end_time,
+          text: word,
+          speaker: speaker
+        }
+      end
+    end
   end
 
-  def gctsv2(x)
-    return 0.0 if x.nil?
-    x.sub('s','').to_f
+  def parse_google_cloud(object)
+    raise "Filename must be set" if @fn.nil?
+
+    # Determine if this is v1 or v2 format
+    first_word = object['results'].last['alternatives'].first['words'].first
+
+    if first_word['startTime'].is_a?(Hash)
+      parse_google_cloud_v1(object)
+    elsif first_word['startOffset'].is_a?(String) || first_word['startOffset'].nil?
+      parse_google_cloud_v2(object)
+    else
+      raise "Unknown Google Cloud Speech format"
+    end
   end
+
+  def parse_google_cloud_v1(object)
+    set_header %w[ file beg end text speaker ]
+    alternatives = object['results'].last['alternatives']
+    if alternatives.first.keys.length == 3
+      raise "Unknown format; might be Google Cloud without speaker tags"
+    end
+    alternatives.first['words'].each do |w|
+      @segments << {
+        file: @fn,
+        beg: google_cloud_timestamp(w['startTime']),
+        end: google_cloud_timestamp(w['endTime']),
+        text: w['word'],
+        speaker: w['speakerTag']
+      }
+    end
+  end
+
+  def parse_google_cloud_v2(object)
+    set_header %w[ file beg end text speaker ]
+    object['results'].each do |result|
+      result['alternatives'].first['words'].each do |w|
+        @segments << {
+          file: @fn,
+          beg: google_cloud_v2_timestamp(w['startOffset']),
+          end: google_cloud_v2_timestamp(w['endOffset']),
+          text: w['word'],
+          speaker: w['speakerLabel']
+        }
+      end
+    end
+  end
+
+  def parse_azure(object)
+    raise "Filename must be set" if @fn.nil?
+    set_header %w[ file beg end text speaker ]
+    object['recognizedPhrases'].each do |phrase|
+      if phrase['nBest'].count != 1
+        raise "Expected exactly 1 nBest result, got #{phrase['nBest'].count}"
+      end
+      speaker = phrase['speaker'].to_s
+      phrase['nBest'].first['words'].each do |word|
+        beg_time = (word['offsetMilliseconds'].to_f / 1000).round(3)
+        duration = (word['durationMilliseconds'].to_f / 1000).round(3)
+        @segments << {
+          file: @fn,
+          beg: beg_time,
+          end: (beg_time + duration).round(3),
+          text: word['word'],
+          speaker: speaker
+        }
+      end
+    end
+  end
+
+  def parse_whisper(object)
+    raise "Filename must be set" if @fn.nil?
+    set_header %w[ file beg end text ]
+    if object['segments'].first['words']
+      parse_whisper_with_words(object)
+    else
+      parse_whisper_without_words(object)
+    end
+  end
+
+  def parse_whisper_with_words(object)
+    object['segments'].each do |segment|
+      segment['words'].each do |word|
+        @segments << {
+          file: @fn,
+          beg: word['start'],
+          end: word['end'],
+          text: word['word'].gsub(/\s/, '')
+        }
+      end
+    end
+  end
+
+  def parse_whisper_without_words(object)
+    object['segments'].each do |segment|
+      words = segment['text'].split
+      beg_time = segment['start']
+      increment = (segment['end'] - beg_time) / words.length
+
+      words.each_with_index do |word, index|
+        end_time = beg_time + increment
+        @segments << {
+          file: @fn,
+          beg: beg_time.round(3),
+          end: end_time.round(3),
+          text: word.gsub(/\s/, '')
+        }
+        beg_time = end_time
+      end
+      # Adjust last segment end time to match segment end
+      @segments[-1][:end] = segment['end'] if @segments.any?
+    end
+  end
+
+  def parse_whisper_cpp(object)
+    raise "Filename must be set" if @fn.nil?
+    set_header %w[ file beg end text ]
+    return if object['transcription'].empty?
+
+    object['transcription'].each do |item|
+      next if item['text'].empty?
+      @segments << {
+        file: @fn,
+        beg: (item['offsets']['from'].to_f / 1000).round(3),
+        end: (item['offsets']['to'].to_f / 1000).round(3),
+        text: item['text']
+      }
+    end
+  end
+
+  def parse_pred_text(object)
+    filename = object['audio_filepath']
+    # TODO: Make audio base path configurable instead of hardcoding
+    duration = `soxi -D /clinical/poetry/#{filename}`.to_f
+    set_header %w[ file beg end text ]
+    @segments << {
+      file: File.basename(filename, '.wav'),
+      beg: 0.0,
+      end: duration,
+      text: object['pred_text']
+    }
+  end
+
+  # Helper methods for timestamp conversions
+
+  def find_ibm_speaker(speaker_labels, beg_time, end_time)
+    # Brute force search - could be optimized with binary search
+    matching_labels = speaker_labels.select { |label|
+      beg_time >= label['from'] && end_time <= label['to']
+    }
+    if matching_labels.count != 1
+      raise "Could not find unique speaker label for segment #{beg_time}-#{end_time} (found #{matching_labels.count})"
+    end
+    matching_labels.first['speaker'].to_s
+  end
+
+  def google_cloud_timestamp(time_obj)
+    time_obj['nanos'].to_f / 1_000_000_000 + time_obj['seconds'].to_f
+  end
+
+  def google_cloud_v2_timestamp(time_string)
+    return 0.0 if time_string.nil?
+    time_string.sub('s', '').to_f
+  end
+
+  public
 
   def print_prep(norm: false, after_time: nil, after_time_with_map: nil)
     @segments.each do |x|
       x[:file] = x[:file].sub(/^.+\//, '').sub /\.\w+$/, ''
       x[:text] = norm x[:text] if norm
     end
-    # @header_string = @header_array.join "\t" if @format == :whisper
     puts @header_string
     if after_time
       @segments.select { |x| x[:end] > after_time }
@@ -397,8 +422,6 @@ class Sample
 
   def print(norm: false, after_time: nil, after_time_with_map: nil)
     segments = print_prep(norm: , after_time: , after_time_with_map: )
-    #puts @segments.first[:end]
-    #puts after_time_with_map[@segments.first[:file]]
     puts segments.map { |x| segment2line x }
   end
 
@@ -428,7 +451,6 @@ class Sample
       speaker = map[x[:file]]
       if speaker
         a << x.dup
-        # a[-1][:speaker] = speaker
       end
     end
     puts a.map { |x| segment2line x }
@@ -438,25 +460,23 @@ class Sample
     x = x.gsub('(())', 'x')
     .gsub(/{\w+}/,'')
     .gsub(/[-=#()?!.,\/$%+~{}\[\]]/, '')
-    # .gsub(/\d/, 'N')
     encoding_options = {
       :invalid           => :replace,  # Replace invalid byte sequences
       :undef             => :replace,  # Replace anything not defined in ASCII
       :replace           => '',        # Use a blank for those replacements
       :universal_newline => true       # Always break lines with \n
     }
-    # x = 'x' if x.length == 0    
-    x#.encode('ASCII', replace: '')
+    x
   end
 
+  # Convert segments to NIST STM (Segment Time Mark) format.
+  # @return [String] STM formatted output
   def stm
     @segments.map do |x|
       [
         x[:file],
         'A',
         x[:speaker],
-        # 'spk',
-        # file2spk(x[:file]),
         x[:beg],
         x[:end],
         fix_parens(x[:text])
@@ -464,6 +484,9 @@ class Sample
     end.join("\n") + "\n"
   end
 
+  # Convert segments to NIST CTM (Conversation Time Marked) format.
+  # Splits multi-word segments into individual word entries.
+  # @return [String] CTM formatted output
   def ctm
     @segments.map do |x|
       words = x[:text].split
@@ -488,7 +511,7 @@ class Sample
     puts segments.map { |x|
       y = x.dup
       y[:speaker] = if speaker == 'x'
-        spk = '`' unless map[y[:file]]
+        spk = '`'.dup unless map[y[:file]]
         map[y[:file]] ||= {}
         map[y[:file]][y[:speaker]] ||= spk.succ!.dup
       else
@@ -498,12 +521,14 @@ class Sample
     }
   end
 
+  # Normalize speaker labels to sequential letters (a, b, c, ...) per file.
+  # @return [Array<String>] Array of formatted segment lines
   def normalize_speakers
     map = {}
     spk = nil
     segments.map { |x|
       y = x.dup
-      spk = '`' unless map[y[:file]]
+      spk = '`'.dup unless map[y[:file]]
       map[y[:file]] ||= {}
       map[y[:file]][y[:speaker]] ||= spk.succ!.dup
       y[:speaker] = map[y[:file]][y[:speaker]]
@@ -525,15 +550,13 @@ class Sample
   def print_findx
     s = nil
     t = 0
-    # nt = 0
     offset = durations[@segments[0][:file]] / 2
     @segments.each_with_index do |x, i|
       b, e = x[:beg], x[:end]
       if x[:text] == 'speech' and b >= offset
         s ||= (b + @segments[i-1][:end]) / 2
         t += e - b
-        # nt += b - @segments[i-1][:end]
-        if t >= 60 * 5
+        if t >= SPEECH_DURATION_THRESHOLD
           action1(s, e, i)
           break
         end
@@ -544,9 +567,6 @@ class Sample
   def action1(s, e, i)
     pad = (@segments[i+1][:beg] - e) / 2
     ee = (e + pad) - s
-    # c = "sox #{@iwav} #{@owav} trim #{@s.round(2)} #{ee.round(2)}"
-    # puts c
-    #`#{c}`
     puts "#@fn #{ee.round(2)}"
   end
 
@@ -687,21 +707,6 @@ class Sample
     end
   end
 
-  def sumx
-    files = {}
-    @segments.each do |x|
-      files[x[:file]] ||= []
-      # files[x[:file]] << x[:end] - x[:beg]
-      b = (x[:beg] * 1000).to_i
-      e = (x[:end] * 1000).to_i
-      puts (x[:end]-x[:beg])
-      puts (b...e).to_a.uniq.count
-      exit
-    end
-    files.each do |k, v|
-      puts "#{v.round(3)} #{k}"
-    end
-  end
 
 
   def init_from_arg
@@ -730,6 +735,8 @@ class Sample
     end
   end
 
+  # Count unintelligible markers (tokens starting with '((') per file.
+  # @return [Hash] Map of filename to count of unintelligible tokens
   def count_unintelligible
     files = {}
     @segments.each do |x|
@@ -739,6 +746,8 @@ class Sample
     files
   end
 
+  # Calculate total overlapping speech duration per file.
+  # @return [Hash] Map of filename to total overlap duration in seconds
   def count_overlap
     files = {}
     overlap = {}

@@ -5,6 +5,7 @@
         {
           "transcript": "Hello world test",
           "confidence": 0.95,
+          "extraField": "something",
           "words": [
             {
               "word": "Hello",

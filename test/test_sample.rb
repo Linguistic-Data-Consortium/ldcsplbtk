@@ -102,25 +102,25 @@ class TestSample < Minitest::Test
   end
 
   # JSON parsing tests - Google Cloud v1 format
-  # NOTE: Google Cloud v1 parsing is currently broken in lib/models.rb
-  # The v1 parser (line 217) is unreachable because the v2 parser (line 198)
-  # catches all objects with 'results' first. This test documents the current
-  # buggy behavior where v1 format is incorrectly parsed as v2, resulting in
-  # nil/0.0 timestamps.
-  def test_init_from_google_cloud_v1_json_currently_broken
+  def test_init_from_google_cloud_v1_json
     json_content = read_fixture('google_cloud_v1.json')
     @sample.init_from(string: json_content, fn: 'test.wav')
 
     assert_equal ['file', 'beg', 'end', 'text', 'speaker'], @sample.header_array
     assert_equal 3, @sample.segments.length
 
-    # Due to bug, v1 is parsed as v2, timestamps are nil -> 0.0
     first_segment = @sample.segments.first
     assert_equal 'test.wav', first_segment[:file]
-    assert_equal 0.0, first_segment[:beg]  # Should be 0.0, but is 0.0 due to bug
-    assert_equal 0.0, first_segment[:end]  # Should be 1.0, but is 0.0 due to bug
+    assert_equal 0.0, first_segment[:beg]
+    assert_equal 1.0, first_segment[:end]
     assert_equal 'Hello', first_segment[:text]
-    assert_nil first_segment[:speaker]  # Should be 1, but is nil due to bug
+    assert_equal 1, first_segment[:speaker]
+
+    second_segment = @sample.segments[1]
+    assert_equal 1.0, second_segment[:beg]
+    assert_equal 2.5, second_segment[:end]  # 2 seconds + 500000000 nanos
+    assert_equal 'world', second_segment[:text]
+    assert_equal 1, second_segment[:speaker]
   end
 
   # JSON parsing tests - Google Cloud v2 format

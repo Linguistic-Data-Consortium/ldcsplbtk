@@ -89,25 +89,23 @@ The test suite covers:
     - Whisper (word-level)
     - Whisper.cpp
     - Rev.ai
+    - Google Cloud Speech-to-Text v1 ✅ (recently fixed!)
     - Google Cloud Speech-to-Text v2 ✅
     - IBM Watson ✅
     - Microsoft Azure ✅
-    - Google Cloud v1 ⚠️ (broken - see Known Issues)
 - ✅ Format conversions (STM, CTM output)
 - ✅ Utility methods (count_unintelligible, count_overlap, normalize_speakers)
 - ✅ Error handling and edge cases
 - ✅ Command-line script integration
 
-## Known Issues
+## Recent Fixes
 
-### Google Cloud Speech-to-Text v1 Format
-The Google Cloud v1 parser (lib/models.rb:217-238) is currently **unreachable** due to a bug in the format detection logic. The v2 parser (line 198) catches all objects with a 'results' key first, preventing v1 from ever being parsed correctly.
+### Google Cloud Speech-to-Text v1 Format (Fixed!)
+The Google Cloud v1 parser was previously unreachable due to a bug in the format detection logic. This has been **fixed** by implementing proper format detection that distinguishes v1 from v2:
+- v1 format uses `startTime`/`endTime` as Hash objects with `seconds` and `nanos` fields
+- v2 format uses `startOffset`/`endOffset` as String values (e.g., "1.5s")
 
-When v1 format data is provided, it gets incorrectly parsed by the v2 parser, resulting in:
-- All timestamps become 0.0 (because v1 uses `startTime`/`endTime` objects, but v2 looks for `startOffset`/`endOffset` strings)
-- Speaker information is lost (nil instead of proper speaker tags)
-
-Test `test_init_from_google_cloud_v1_json_currently_broken` documents this behavior.
+The parser now correctly handles both formats. Test `test_init_from_google_cloud_v1_json` validates the fix.
 
 ## Adding New Tests
 
