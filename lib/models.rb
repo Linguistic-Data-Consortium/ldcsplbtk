@@ -185,6 +185,8 @@ class Sample
       parse_rev(object)
     when object['audio_metrics']
       parse_ibm(object)
+    when object['jobName']
+      parse_aws(object)
     when object['results']
       parse_google_cloud(object)
     when object['source']
@@ -237,6 +239,43 @@ class Sample
         }
       end
     end
+  end
+
+  def parse_aws(object)
+    raise "Filename must be set" if @fn.nil?
+    items = object['results']['items']
+    speaker_segments = object.dig('results', 'speaker_labels', 'segments')
+    has_speaker = !speaker_segments.nil? || items.any? { |i| i['speaker_label'] }
+
+    if has_speaker
+      set_header %w[ file beg end text speaker ]
+    else
+      set_header %w[ file beg end text ]
+    end
+
+    items.each do |item|
+      next unless item['type'] == 'pronunciation'
+      beg_time = item['start_time'].to_f
+      end_time = item['end_time'].to_f
+      segment = {
+        file: @fn,
+        beg: beg_time,
+        end: end_time,
+        text: item['alternatives'].first['content']
+      }
+      if has_speaker
+        segment[:speaker] = item['speaker_label'] ||
+          find_aws_speaker(speaker_segments, beg_time, end_time)
+      end
+      @segments << segment
+    end
+  end
+
+  def find_aws_speaker(speaker_segments, beg_time, end_time)
+    match = speaker_segments.find { |s|
+      beg_time >= s['start_time'].to_f && end_time <= s['end_time'].to_f
+    }
+    match && match['speaker_label'].to_s
   end
 
   def parse_google_cloud(object)
