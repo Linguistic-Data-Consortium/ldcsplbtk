@@ -194,7 +194,7 @@ class TestSample < Minitest::Test
     json_content = read_fixture('aws.json')
     @sample.init_from(string: json_content, fn: 'CarrieFisher10s.wav')
 
-    assert_equal ['file', 'beg', 'end', 'text'], @sample.header_array
+    assert_equal ['file', 'beg', 'end', 'text', 'speaker'], @sample.header_array
     assert_equal 29, @sample.segments.length  # 32 items, 3 are punctuation
 
     first_segment = @sample.segments.first
@@ -202,11 +202,13 @@ class TestSample < Minitest::Test
     assert_equal 0.479, first_segment[:beg]
     assert_equal 0.81, first_segment[:end]
     assert_equal "That's", first_segment[:text]
+    assert_equal 'ch_0', first_segment[:speaker]
 
     last_segment = @sample.segments.last
     assert_equal 9.81, last_segment[:beg]
     assert_equal 9.89, last_segment[:end]
     assert_equal 'including', last_segment[:text]
+    assert_equal 'ch_0', last_segment[:speaker]
   end
 
   # JSON parsing tests - Whisper.cpp format

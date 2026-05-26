@@ -245,7 +245,8 @@ class Sample
     raise "Filename must be set" if @fn.nil?
     items = object['results']['items']
     speaker_segments = object.dig('results', 'speaker_labels', 'segments')
-    has_speaker = !speaker_segments.nil? || items.any? { |i| i['speaker_label'] }
+    has_speaker = !speaker_segments.nil? ||
+      items.any? { |i| i['speaker_label'] || i['channel_label'] }
 
     if has_speaker
       set_header %w[ file beg end text speaker ]
@@ -265,13 +266,15 @@ class Sample
       }
       if has_speaker
         segment[:speaker] = item['speaker_label'] ||
-          find_aws_speaker(speaker_segments, beg_time, end_time)
+          find_aws_speaker(speaker_segments, beg_time, end_time) ||
+          item['channel_label']
       end
       @segments << segment
     end
   end
 
   def find_aws_speaker(speaker_segments, beg_time, end_time)
+    return nil if speaker_segments.nil?
     match = speaker_segments.find { |s|
       beg_time >= s['start_time'].to_f && end_time <= s['end_time'].to_f
     }
