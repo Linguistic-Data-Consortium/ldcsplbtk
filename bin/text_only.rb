@@ -1,9 +1,18 @@
 #!/usr/bin/env ruby
 =begin
 
-converts transcript to NIST STM format, writing to stdout.
+writes the text of a transcript, one plain text file per file id.
 
-    stm.rb file1
+    text_only.rb file1 directory
+
+The directory must already exist.  One <file-id>.txt is written into it for
+each distinct file id, containing that file's segment text joined with
+spaces and no timestamps.
+
+NOTE: the normalization rules applied here (spelling out numerals, trimming
+elongated letters) inspect one whole segment at a time rather than one token
+at a time, so on segment level transcripts they mostly do not fire.  They
+were written for word level input.
 
 =end
 

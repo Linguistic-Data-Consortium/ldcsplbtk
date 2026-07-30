@@ -2,7 +2,30 @@
 
 Code for manipulating text based speech labels, including transcripts.
 
-# Examples
+A wide variety of input formats can be parsed -- tab delimited text, NIST CTM,
+and the JSON emitted by most commercial ASR services -- and all of them are
+normalized to one tabular representation. Most scripts read that
+representation, do one thing to it, and write to stdout.
+
+# Requirements
+
+- **Ruby 3.1 or later.** The code uses shorthand hash syntax (`foo(bar:)`),
+  which is a syntax error on Ruby 3.0.
+- **No gems.** The only dependency is `json` from the standard library.
+  Minitest, used by the test suite, also ships with Ruby.
+- **`sox`** is needed by `sum.rb` only, which shells out to `soxi` to read
+  audio durations. Every other script works without it.
+
+There is nothing to install or build. Clone the repository and run the
+scripts out of `bin/`, which are executable and carry a shebang:
+
+    git clone <repository-url>
+    cd ldcsplbtk
+    bin/combine.rb transcript.tsv
+
+Add `bin/` to your `PATH` if you would rather not type the prefix.
+
+# The tabular format
 
 Consider this file, called `hamlet.tsv`:
 
@@ -11,8 +34,18 @@ Consider this file, called `hamlet.tsv`:
     hamlet.wav  3.3 4.4 or not to be
 
 This is a plain text, tab delimited (TSV), four column file, with a header
-and two transcribed segments.  In general, this library reads and writes tabular
-data like this.  A wide variety of input formats can be parsed, but not necessarily used as output formats.
+and two transcribed segments. In general, this library reads and writes
+tabular data like this. A wide variety of input formats can be parsed, but
+not necessarily used as output formats.
+
+`beg` and `end` are seconds from the start of the recording. Two further
+columns are optional and must appear in this order:
+
+    file    beg end text    speaker
+    file    beg end text    speaker section
+
+A segment is one row. Depending on the source it may be a word, an utterance,
+or a whole recording -- nothing in the format distinguishes these.
 
 Consider another file, called `lincoln.tsv`
 
@@ -27,13 +60,47 @@ The command
 would produce a file `hamlin.tsv` like this (note: file extensions are stripped by default):
 
     file    beg end text
-    hamlet.wav  1.1 2.2 to be
-    hamlet.wav  3.3 4.4 or not to be
-    lincoln.wav 80.0 81.0 four score
-    lincoln.wav 82.0 87.0 and seven years ago
+    hamlet  1.1 2.2 to be
+    hamlet  3.3 4.4 or not to be
+    lincoln 80.0 81.0 four score
+    lincoln 82.0 87.0 and seven years ago
 
-This file represents two different transcripts, but can they can be manipulated
+This file represents two different transcripts, but they can be manipulated
 together, which reduces the number of files users have to deal with.
+
+# Input formats
+
+Format detection is automatic, based on content rather than file extension.
+
+| Format | Notes |
+|---|---|
+| TSV, 4/5/6 column | With or without a header row |
+| TSV, `start end text` header | No file column; supply the name (see below) |
+| TSV, 3 column speech activity | `beg`, `end`, and `speech` or `non-speech` |
+| CTM | NIST Conversation Time Marked |
+| Rev.ai JSON | word level, with speaker |
+| Whisper JSON | word level if `words` present, otherwise timings are interpolated evenly across the segment's words |
+| Whisper.cpp JSON | segment level |
+| Google Cloud STT JSON | v1 and v2, with speaker |
+| AWS Transcribe JSON | with speaker or channel where present |
+| IBM Watson JSON | with speaker |
+| Microsoft Azure JSON | with speaker |
+
+The two formats that carry no file column take it from the input filename.
+That is supplied automatically by the scripts; against the library directly
+it is the `fn:` argument, and omitting it raises `the file name must be set`:
+
+```ruby
+Sample.new.init_from(string: File.read('sad.tsv'), fn: 'interview.wav')
+```
+
+The same applies to every JSON format, none of which record the name of the
+audio they describe. For those the file column is the basename of the input
+file, so `rev.json` yields a file id of `rev` once extensions are stripped.
+
+Output is TSV, or one of the conversion formats below. Round tripping is not
+a goal: the parsers are lossy, and information a format does not have a
+column for is dropped.
 
 # Concatenation and Conversion
 
@@ -73,6 +140,59 @@ bin/combine.rb --strip-ext hamlet.tsv lincoln.tsv > hamlin.tsv
 bin/combine.rb --keep-ext hamlet.tsv lincoln.tsv > hamlin.tsv
 bin/combine.rb -k hamlet.tsv lincoln.tsv > hamlin.tsv
 ```
+
+Leading directories are always stripped, whichever flag is used.
+
+# The scripts
+
+Every script takes exactly the arguments shown. None of them read stdin, and
+none accept `--help`; the comment at the top of each file is its
+documentation.
+
+## Converting
+
+| Script | Usage | Purpose |
+|---|---|---|
+| `combine.rb` | `[options] file...` | Concatenate and convert to TSV |
+| `stm.rb` | `file` | Convert to NIST STM |
+| `ctm.rb` | `file` | Convert to NIST CTM, splitting segments into words |
+| `rttm.rb` | `file dir` | Convert to NIST RTTM, one file per file id |
+| `split.rb` | `file dir` | Split into one TSV per file id (inverse of `combine.rb`) |
+| `text_only.rb` | `file dir` | Write plain text, one file per file id |
+
+## Measuring
+
+| Script | Usage | Purpose |
+|---|---|---|
+| `segment_stats.rb` | `[--combined] file` | Segment count, mean length, mean gap, total length |
+| `count_overlap.rb` | `file` | Total overlapping speech duration per file |
+| `count_unintelligible.rb` | `file` | Count of `((...))` markers per file |
+| `sum.rb` | `file` | Speech duration against audio duration (see caveat below) |
+| `print_files.rb` | `file` | The distinct file ids in a transcript |
+
+## Editing and filtering
+
+| Script | Usage | Purpose |
+|---|---|---|
+| `merge_segments.rb` | `threshold file` | Merge consecutive segments across small gaps |
+| `normalize_speakers.rb` | `file` | Rewrite speaker labels as `a`, `b`, `c`, ... |
+| `print_only_these.rb` | `map file` | Keep only the file ids listed in a two column map |
+| `check_for_final_hallucination.rb` | `file durations` | Find segments past a recording's known duration |
+
+## Scoring output
+
+These two read SCTK output rather than transcripts, and do not go through
+the parsers.
+
+| Script | Usage | Purpose |
+|---|---|---|
+| `wer_from_sys.rb` | `file.sys...` | Extract word error rate from `.sys` files |
+| `filter_pra.rb` | `file.pra` | Show only alignment blocks that scored an error |
+
+**Caveat on `sum.rb`:** it resolves audio as
+`/clinical/poetry/penn_sound_audio/data/<file>.flac`, a hardcoded path, so it
+only works on that corpus. The same hardcoding affects the `pred_text` JSON
+parser.
 
 ## Segment Statistics
 
@@ -125,6 +245,8 @@ Behavior:
 - **Does NOT merge across different source files** - each file is processed independently
 - Segments are sorted by begin time before merging
 - Merged segments combine their text with spaces
+- A merged segment spans to the latest end time of its inputs, so nesting a
+  short segment inside a longer one does not shorten the result
 
 Example:
 ```
@@ -140,22 +262,36 @@ interview.wav 0.0  2.0  hello world
 interview.wav 5.0  6.0  test
 ```
 
+# Using the library directly
+
+The scripts are thin wrappers over one class, `Sample`, in `lib/models.rb`:
+
+```ruby
+require_relative 'lib/models'
+
+sample = Sample.new
+sample.init_from(string: File.read('transcript.tsv'))
+
+sample.print          # write TSV to stdout
+puts sample.stm       # convert to STM
+sample.segments       # array of hashes, keyed :file, :beg, :end, :text, ...
+```
+
+`add(other_sample:)` merges another `Sample` in, and raises unless the two
+have identical headers. `print` does not modify the sample, so it can be
+called more than once.
+
 # Testing
 
-The toolkit includes a comprehensive test suite using Minitest. To run the tests:
+The toolkit includes a test suite using Minitest. To run the tests:
 
 ```bash
 rake test
 ```
 
-The test suite includes:
-- **Unit tests** for the `Sample` class (47 tests, 260 assertions)
-- **Integration tests** for command-line scripts (18 tests, 34 assertions)
-- **Comprehensive format coverage:**
-  - TSV (basic, with speaker, with section)
-  - CTM (NIST format)
-  - JSON formats: Whisper, Whisper.cpp, Rev.ai, Google Cloud v1 & v2, IBM Watson, Azure
-- Utility method tests (unintelligible counting, speaker normalization, overlap detection, segment merging, etc.)
+The suite covers every input format listed above, the conversion outputs, the
+utility methods, and each `bin/` script end to end. `test/test_known_bugs.rb`
+holds regression tests for previously fixed defects, named for the behavior
+they pin down.
 
 See `test/README.md` for detailed testing documentation.
-

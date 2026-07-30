@@ -1,18 +1,17 @@
 #!/usr/bin/env ruby
 =begin
 
-combine (concatenates) tsv files, check headers/columns, write to stdout
+counts unintelligible markers per file, writing to stdout.
 
-    combine.rb file1 file2 ...
+    count_unintelligible.rb file1
 
-The header can be specified with the first arg like this
+A marker is any whitespace separated token beginning with '((', the
+convention used for unintelligible speech, e.g. ((unclear)).
 
-    combine.rb h:beg:end:text file1 file2 ...
+The output is a two column tsv of file and count:
 
-which indicates a three column format of beg, end, and text columns.
-
-If the header isn't given, the first file must have a header.  Otherwise headers are optional,
-and are discarded.  The output has a single header.
+    file    unintelligible
+    interview   3
 
 =end
 

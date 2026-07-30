@@ -1,9 +1,13 @@
 #!/usr/bin/env ruby
 =begin
 
-converts transcript to NIST STM format, writing to stdout.
+splits a combined transcript into one tsv per file id.
 
-    stm.rb file1
+    split.rb file1 directory
+
+The directory must already exist.  One <file-id>.tsv is written into it for
+each distinct file id, each carrying the same header as the input.  This is
+the inverse of combine.rb.
 
 =end
 

@@ -1,9 +1,18 @@
 #!/usr/bin/env ruby
 =begin
 
-converts transcript to NIST STM format, writing to stdout.
+filters SCTK .pra alignment files for scored utterances, writing to stdout.
 
-    stm.rb file1
+    filter_pra.rb file1.pra
+
+Prints each alignment block -- an 'id:' line, the five lines following it,
+and its 'Eval:' line -- but only where the Eval line is non-empty, i.e.
+where sclite recorded at least one substitution, deletion or insertion.
+Blocks that aligned perfectly are skipped.  Blocks are separated by blank
+lines.
+
+Unlike the other scripts here this one reads sclite output directly, not a
+transcript, so it does not go through the Sample parsers.
 
 =end
 

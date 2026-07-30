@@ -2,6 +2,10 @@
 
 This directory contains the test suite for the LDC Speech Label Toolkit.
 
+The suite uses **Minitest**, which ships with Ruby, so there are no
+dependencies to install. Ruby 3.1 or later is required, matching the library
+itself.
+
 ## Running Tests
 
 ### Run all tests
@@ -37,7 +41,7 @@ Unit tests for the `Sample` class covering:
 - Initialization and header management
 - TSV format parsing (basic, with speaker, with section)
 - CTM format parsing
-- JSON format parsing (Whisper, Rev)
+- JSON format parsing for every supported vendor
 - Combining samples
 - Output format generation (STM, CTM)
 - Utility methods (count_unintelligible, normalize_speakers, etc.)
@@ -82,6 +86,32 @@ Tests for combine.rb command-line options:
 - --keep-ext / -k flag
 - Multiple file handling with options
 
+### test_known_bugs.rb
+Regression tests for defects found in review and since fixed. Each test is
+named for the behavior it pins down and carries a comment giving the
+original failure. These were written to fail first, against the unfixed
+code, so each one demonstrably exercises the defect rather than merely
+passing alongside it.
+
+Covered there:
+- Whisper segment-level parsing no longer rewrites the previous segment's
+  end time when a segment has empty text
+- Merging a nested segment does not shorten the merged span
+- Short CTM lines are rejected rather than parsed into nil fields
+- Overlap counting distinguishes duplicate segments from self-comparison
+- An unknown file in a durations map is skipped rather than crashing
+- The `start end text` and 3-column speech activity formats parse
+- JSON input works through the scripts that load their input via
+  `init_from_arg`, and the file column carries no directory prefix
+- STM output never emits an empty speaker field
+- `print` does not mutate the sample it renders
+- `printone` honors the arguments it accepts
+
+Two of these encode a policy decision rather than a self-evident fix, and
+say so in a comment: what to do with a file absent from a durations map, and
+what to emit for a missing speaker. Changing the policy means changing those
+assertions.
+
 ### fixtures/
 Sample data files used for testing:
 
@@ -89,6 +119,7 @@ Sample data files used for testing:
 - `basic.tsv` - Simple 4-column TSV
 - `speaker.tsv` - TSV with speaker column
 - `section.tsv` - TSV with speaker and section columns
+- `gaps.tsv` - Multi-file TSV with gaps between segments
 - `basic.ctm` - CTM format sample
 - `unintelligible.tsv` - TSV with unintelligible markers
 
@@ -96,43 +127,31 @@ Sample data files used for testing:
 - `whisper.json` - Whisper format (with word-level timestamps)
 - `whisper_cpp.json` - Whisper.cpp format
 - `rev.json` - Rev.ai format
-- `google_cloud_v1.json` - Google Cloud Speech-to-Text v1 (⚠️ currently broken - see below)
+- `google_cloud_v1.json` - Google Cloud Speech-to-Text v1
 - `google_cloud_v2.json` - Google Cloud Speech-to-Text v2
 - `ibm_watson.json` - IBM Watson format
+- `aws.json` - AWS Transcribe format
 - `azure.json` - Microsoft Azure format
-
-## Test Framework
-
-The test suite uses **Minitest**, which is part of Ruby's standard library (no additional dependencies required).
 
 ## Coverage
 
-The test suite covers:
-- ✅ Core functionality of the Sample class
-- ✅ Multiple input formats:
+The suite covers:
+- Core functionality of the `Sample` class
+- Every input format the library claims to support:
   - **TSV** (basic, with speaker, with section columns)
   - **CTM** (NIST format)
-  - **JSON formats:**
-    - Whisper (word-level)
-    - Whisper.cpp
-    - Rev.ai
-    - Google Cloud Speech-to-Text v1 ✅ (recently fixed!)
-    - Google Cloud Speech-to-Text v2 ✅
-    - IBM Watson ✅
-    - Microsoft Azure ✅
-- ✅ Format conversions (STM, CTM output)
-- ✅ Utility methods (count_unintelligible, count_overlap, normalize_speakers)
-- ✅ Error handling and edge cases
-- ✅ Command-line script integration
+  - **JSON**: Whisper, Whisper.cpp, Rev.ai, Google Cloud v1 and v2,
+    AWS Transcribe, IBM Watson, Microsoft Azure
+- Format conversions (STM, CTM output)
+- Utility methods (count_unintelligible, count_overlap, normalize_speakers)
+- Error handling and edge cases
+- Command-line script integration
 
-## Recent Fixes
-
-### Google Cloud Speech-to-Text v1 Format (Fixed!)
-The Google Cloud v1 parser was previously unreachable due to a bug in the format detection logic. This has been **fixed** by implementing proper format detection that distinguishes v1 from v2:
-- v1 format uses `startTime`/`endTime` as Hash objects with `seconds` and `nanos` fields
-- v2 format uses `startOffset`/`endOffset` as String values (e.g., "1.5s")
-
-The parser now correctly handles both formats. Test `test_init_from_google_cloud_v1_json` validates the fix.
+Deliberate gaps, worth knowing before trusting a green run:
+- `sum.rb` and the `pred_text` parser shell out to `soxi` against a
+  hardcoded corpus path, so neither is exercised
+- `print_find`, `print_findx`, `speakersx` and `change_speakers` are
+  untested, and are also unreachable from `bin/`
 
 ## Adding New Tests
 
@@ -140,8 +159,12 @@ The parser now correctly handles both formats. Test `test_init_from_google_cloud
 2. Add test methods to the appropriate test file:
    - Unit tests → `test_sample.rb`
    - Integration tests → `test_bin_scripts.rb`
+   - Regression tests for a fixed defect → `test_known_bugs.rb`
 3. Follow the naming convention: `test_<description>`
 4. Run tests to verify they pass
+
+When fixing a defect, write the test first and watch it fail. A regression
+test that has never failed has not been shown to test anything.
 
 ## Test Conventions
 

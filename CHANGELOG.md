@@ -1,99 +1,107 @@
 # Changelog
 
-## New Features
+Notable changes to the LDC Speech Label Toolkit.
 
-### Segment Merging Script
-- **Added `merge_segments.rb`** - Merge consecutive transcript segments when gap is below threshold:
-  - Takes threshold (seconds) and input file as arguments
-  - Merges segments within same file when gap < threshold
-  - Preserves speaker boundaries (only merges same speaker)
-  - Does NOT merge across different source files
-  - Outputs merged segments in TSV format to stdout
-- Added `merge_segments(threshold:)` method to `Sample` class
-- Added 12 comprehensive tests covering:
-  - Basic merging with various thresholds
-  - Threshold boundary conditions
-  - Multi-file handling (no cross-file merging)
-  - Speaker diarization (no cross-speaker merging)
-  - Edge cases (single segment, empty sample, zero threshold)
-  - Complex multi-file, multi-speaker scenarios
+The project is not versioned and has no releases, so everything below sits
+under Unreleased, newest group first. Once versions exist, cut a dated
+section here and leave Unreleased for what follows it.
 
-### Segment Statistics Script
-- **Added `segment_stats.rb`** - Calculate statistics about segment durations and gaps:
-  - Average segment length
-  - Average gap between consecutive segments
-  - Total number of segments
-  - Total duration of all segments
-  - **New**: `--combined` / `-c` flag to calculate averages across all segments (gaps still within file boundaries)
-- Added 3 new methods to `Sample` class:
-  - `average_segment_length()` - Per-file average segment duration
-  - `average_segment_gap()` - Per-file average gap between segments
-  - `segment_statistics(combined: false)` - Comprehensive stats (combines all metrics)
-- Added 11 tests (9 unit tests + 2 integration tests)
-- Handles multiple files, overlapping segments, and edge cases
+## Unreleased
 
-### File Extension Control in combine.rb
-- **Added command-line flags** to control file extension handling in `combine.rb`:
-  - `--strip-ext` / `-s`: Strip file extensions from first column (default behavior)
-  - `--keep-ext` / `-k`: Keep file extensions in first column
-- Maintains backward compatibility (extensions still stripped by default)
-- Added 6 new tests to verify flag behavior
+### Fixed
 
-## Improvements (Current)
+Ten defects found in review. Each has a regression test in
+`test/test_known_bugs.rb`, written to fail against the unfixed code.
 
-### Critical Bug Fixes
-- **Fixed Google Cloud v1 Parser** - The v1 parser was unreachable because v2 parser caught all `results` objects first. Now properly detects v1 vs v2 by examining timestamp format.
-- **Fixed String Literal Warning** - Resolved frozen string literal mutation warnings in `normalize_speakers` and `change_speakers` methods.
+Wrong output, produced silently:
 
-### Major Refactoring
-- **Extracted Parser Methods** - Broke down the 204-line `add_object` method into 13 focused parser methods:
-  - `parse_rev()` - Rev.ai format
-  - `parse_ibm()` - IBM Watson format
-  - `parse_google_cloud()` - Dispatcher for Google Cloud formats
-  - `parse_google_cloud_v1()` - Google Cloud v1 format
-  - `parse_google_cloud_v2()` - Google Cloud v2 format
-  - `parse_azure()` - Microsoft Azure format
-  - `parse_whisper()` - Whisper format (dispatcher)
-  - `parse_whisper_with_words()` - Whisper with word-level timestamps
-  - `parse_whisper_without_words()` - Whisper segment-level only
-  - `parse_whisper_cpp()` - Whisper.cpp format
-  - `parse_pred_text()` - Custom pred_text format
+- **Whisper segment-level parsing corrupted the preceding segment.** A
+  segment whose text was empty rewrote the end time of a word belonging to
+  the *previous* segment, and divided by zero computing its own word
+  timings. Wordless segments are now skipped.
+- **Merging a nested segment discarded audio.** `merge_segments` assigned
+  rather than extended the merged end time, so a short segment inside a
+  longer one moved the end backwards. A merged span now covers the latest
+  end time of its inputs.
+- **Short CTM lines parsed into nil fields.** The column check compared a
+  four element slice against a four column header, so it was always true.
+  The source line is now validated before slicing.
+- **Overlapping duplicate segments went uncounted.** `count_overlap` used
+  hash value equality to skip self-comparison, so two distinct segments with
+  identical fields were treated as the same segment. It now compares
+  identity.
 
-### Code Quality Improvements
-- **Removed Dead Code** - Eliminated ~80 lines of commented-out code
-- **Better Error Messages** - Replaced generic errors like "what to do?" with descriptive messages
-  - e.g., "Expected exactly 1 nBest result, got N"
-  - e.g., "Could not find unique speaker label for segment X-Y"
-- **Renamed Helper Methods** for clarity:
-  - `ibmsp()` → `find_ibm_speaker()`
-  - `gcts()` → `google_cloud_timestamp()`
-  - `gctsv2()` → `google_cloud_v2_timestamp()`
-- **Added Constants** - Extracted magic numbers to named constants:
-  - `SPEECH_DURATION_THRESHOLD = 5 * 60` (was inline `60 * 5`)
+Crashes and formats that never worked:
+
+- **A file missing from a durations map crashed** `check_for_final_hallucination.rb`
+  with `comparison of Float with nil failed`. Files with no known duration
+  are now skipped, since nothing about them can be reported.
+- **Two documented input formats had never parsed.** Both the
+  `start end text` header and the three column speech activity form set a
+  four column header for three column data, so every row raised
+  `bad line, 3 columns`. Both now take the file column from the input
+  filename.
+- **JSON input failed in ten scripts.** `init_from_arg` never passed the
+  filename through, so every vendor JSON parser raised
+  `Filename must be set`. It now passes the basename -- not the full path,
+  which `split.rb` and `rttm.rb` interpolate into output filenames.
+
+Malformed or surprising output:
+
+- **STM output emitted an empty speaker field** for input without a speaker
+  column, producing invalid NIST STM. It now falls back to `unknown`.
+- **`print` mutated the sample it rendered**, so the first call stripped
+  extensions permanently and a later `strip_extensions: false` had nothing
+  left to preserve. It now renders into copies.
+- **`printone` discarded every argument it accepted**, passing hardcoded
+  values to `print_prep` instead of `norm:`, `after_time:` and
+  `after_time_with_map:`.
 
 ### Documentation
-- **Added Class-Level Documentation** - Comprehensive overview of Sample class with supported formats and examples
-- **Added Method Documentation** - YARD-style docs for all public methods with:
-  - Parameter types and descriptions
-  - Return value descriptions
-  - Exception documentation
-- **Added Inline Comments** - Clarified complex parsing logic and helper methods
 
-### File Size Reduction
-- **Before:** 763 lines
-- **After:** 772 lines
-- Net change: +9 lines (documentation added outweighs code removed)
-- Complexity: Significantly reduced through method extraction
+- Corrected the header comment on eight scripts that documented a different
+  script entirely -- `count_overlap.rb` and `count_unintelligible.rb`
+  described `combine.rb`, and `filter_pra.rb`, `print_files.rb`, `rttm.rb`,
+  `split.rb`, `sum.rb` and `text_only.rb` described `stm.rb` or `ctm.rb`.
+  These comments are each script's only usage documentation.
+- Rewrote `README.md`: added requirements, the Ruby 3.1 floor, installation,
+  a table of every input format, and a table covering all seventeen scripts
+  rather than five. Corrected the `combine.rb` example, which showed
+  unstripped filenames while stating extensions are stripped by default.
+- Documented that `sum.rb` and the `pred_text` parser resolve audio through
+  a hardcoded corpus path and only work on that corpus.
+- `test/README.md` no longer describes Google Cloud v1 as both broken and
+  fixed, and no longer cites test counts that drift out of date.
 
-### Test Updates
-- Updated `test_init_from_google_cloud_v1_json` to verify the fix works correctly
-- All 36 tests pass with 166 assertions (was 162)
-- Updated test documentation to reflect fixed Google Cloud v1 support
+### Added
 
-### Impact Summary
-- ✅ 2 critical bugs fixed (v1 parser, string literal warning)
-- ✅ 80+ lines of dead code removed
-- ✅ 13 new well-documented parser methods
-- ✅ Complexity greatly reduced (204-line method → 13 focused methods)
-- ✅ All tests passing
-- ✅ Comprehensive documentation added
+- **`merge_segments.rb`** -- merge consecutive segments when the gap between
+  them is below a threshold. Merges within a file only, and only across
+  matching speakers. Adds `Sample#merge_segments(threshold:)`.
+- **`segment_stats.rb`** -- segment count, mean length, mean gap and total
+  length, per file or, with `--combined` / `-c`, across all segments. Gaps
+  are still measured within a file, never across file boundaries. Adds
+  `Sample#average_segment_length`, `#average_segment_gap` and
+  `#segment_statistics(combined:)`.
+- **Extension flags for `combine.rb`** -- `--strip-ext` / `-s` (the existing
+  default) and `--keep-ext` / `-k`.
+
+### Changed
+
+- **Google Cloud v1 parsing works.** The v1 parser had been unreachable: v2
+  matched every object with a `results` key first. The two are now
+  distinguished by timestamp shape -- v1 uses `{seconds, nanos}` objects, v2
+  uses `"1.5s"` strings.
+- **Split `add_object` into per-vendor parsers.** One 204 line method with
+  eight levels of nesting became thirteen focused ones, one per format plus
+  dispatchers for the Google Cloud and Whisper variants.
+- Replaced placeholder errors such as `what to do?` with messages naming the
+  format and the offending value.
+- Renamed opaque helpers: `ibmsp` to `find_ibm_speaker`, `gcts` to
+  `google_cloud_timestamp`, `gctsv2` to `google_cloud_v2_timestamp`.
+- Extracted magic numbers into named constants: `SPEECH_DURATION_THRESHOLD`,
+  `DEFAULT_SPEAKER`, `CTM_MIN_COLUMNS`.
+- Removed roughly eighty lines of commented-out code.
+- Added class and method documentation to `Sample`.
+- Resolved frozen string literal mutation warnings in `normalize_speakers`
+  and `change_speakers`.

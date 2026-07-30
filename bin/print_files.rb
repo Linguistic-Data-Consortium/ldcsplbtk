@@ -1,9 +1,12 @@
 #!/usr/bin/env ruby
 =begin
 
-converts transcript to NIST STM format, writing to stdout.
+lists the distinct file ids in a transcript, writing to stdout.
 
-    stm.rb file1
+    print_files.rb file1
+
+One id per line, sorted and de-duplicated.  Useful for seeing which
+transcripts a combined file covers.
 
 =end
 
