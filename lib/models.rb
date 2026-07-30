@@ -24,6 +24,15 @@ class Sample
   # Minimum speech duration threshold in seconds for speech activity detection
   SPEECH_DURATION_THRESHOLD = 5 * 60  # 5 minutes
 
+  # Placeholder used in speaker-bearing output formats (STM, RTTM) when the
+  # input has no speaker column. Emitting an empty field there would produce
+  # a malformed file.
+  DEFAULT_SPEAKER = 'unknown'
+
+  # Number of whitespace-separated columns a CTM line must have:
+  # file, channel, beg, duration, word (an optional confidence may follow).
+  CTM_MIN_COLUMNS = 5
+
   # @return [Array<String>] Column names for the current format
   attr_accessor :header_array
 
@@ -90,6 +99,7 @@ class Sample
     when "start\tend\ttext"
       raise "the file name must be set" if @fn.nil?
       @header = true
+      @prepend_file = true
       set_header %w[ file beg end text ]
     else
       @header = false
@@ -97,8 +107,10 @@ class Sample
       case a.length
       when 3
         if timestamp(a[0]) and timestamp(a[1]) and a[2] =~ /^(non-)?(speech)\z/
+          raise "the file name must be set" if @fn.nil?
           @sad = true
-          @header_array = %w[ file beg end text ]
+          @prepend_file = true
+          set_header %w[ file beg end text ]
         else
           raise "bad header: #{line}"
         end
@@ -135,11 +147,14 @@ class Sample
   end
 
   def add_segment_from_ctm(line:)
-    a = line.split
-    a = [ a[0], a[2], a[3], a[4] ]
-    if a.length != @header_array.length
-      raise "bad line, #{a.length} columns: #{line.gsub "\t", "TAB"}"
+    fields = line.split
+    # Check the source line, not the 4-element slice built from it: slicing
+    # first would make this comparison vacuously true and let short lines
+    # through with nil fields.
+    if fields.length < CTM_MIN_COLUMNS
+      raise "bad line, #{fields.length} columns: #{line.gsub "\t", "TAB"}"
     end
+    a = [ fields[0], fields[2], fields[3], fields[4] ]
     segment = {}
     @header_array.zip(a).each do |k, v|
       case k
@@ -156,6 +171,9 @@ class Sample
   # Checks the number of fields, but that's it.
   def add_segment_from_tsv(line:)
     a = line.split "\t", -1
+    # Formats that carry no file column (the "start end text" header and the
+    # 3-column SAD form) take it from the fn: argument instead.
+    a.unshift @fn if @prepend_file
     if a.length != @header_array.length
       raise "bad line, #{a.length} columns: #{line.gsub "\t", "TAB"}"
     end
@@ -376,10 +394,15 @@ class Sample
   def parse_whisper_without_words(object)
     object['segments'].each do |segment|
       words = segment['text'].split
+      # A segment with no words contributes nothing. Falling through would
+      # divide by zero below and then rewrite the end time of a word
+      # belonging to the *previous* segment.
+      next if words.empty?
+
       beg_time = segment['start']
       increment = (segment['end'] - beg_time) / words.length
 
-      words.each_with_index do |word, index|
+      words.each do |word|
         end_time = beg_time + increment
         @segments << {
           file: @fn,
@@ -389,8 +412,9 @@ class Sample
         }
         beg_time = end_time
       end
-      # Adjust last segment end time to match segment end
-      @segments[-1][:end] = segment['end'] if @segments.any?
+      # Adjust this segment's last word to end exactly on the segment end,
+      # absorbing the rounding drift from the increments above.
+      @segments[-1][:end] = segment['end']
     end
   end
 
@@ -448,18 +472,28 @@ class Sample
   public
 
   def print_prep(norm: false, after_time: nil, after_time_with_map: nil, strip_extensions: true)
-    @segments.each do |x|
-      x[:file] = x[:file].sub(/^.+\//, '')
-      x[:file] = x[:file].sub(/\.\w+$/, '') if strip_extensions
-      x[:text] = norm x[:text] if norm
+    # Render into copies: rewriting @segments in place would make the first
+    # call permanent, so a later call's strip_extensions: would have nothing
+    # left to preserve.
+    segments = @segments.map do |x|
+      y = x.dup
+      y[:file] = y[:file].sub(/^.+\//, '')
+      y[:file] = y[:file].sub(/\.\w+$/, '') if strip_extensions
+      y[:text] = norm(y[:text]) if norm
+      y
     end
     puts @header_string
     if after_time
-      @segments.select { |x| x[:end] > after_time }
+      segments.select { |x| x[:end] > after_time }
     elsif after_time_with_map
-      @segments.select { |x| x[:end] > after_time_with_map[x[:file]] }
+      # A file with no entry in the map has no known cutoff, so nothing about
+      # it can be reported. Comparing against nil would raise instead.
+      segments.select do |x|
+        cutoff = after_time_with_map[x[:file]]
+        cutoff && x[:end] > cutoff
+      end
     else
-      @segments
+      segments
     end
   end
 
@@ -469,7 +503,8 @@ class Sample
   end
 
   def printone(norm: false, after_time: nil, after_time_with_map: nil)
-    segments = print_prep(norm: false, after_time: nil, after_time_with_map: nil)
+    segments = print_prep(norm: , after_time: , after_time_with_map: )
+    return if segments.empty?
     segment = segments[0].dup
     segments[1..-1].each do |x|
       if x[:file] != segment[:file]
@@ -519,12 +554,19 @@ class Sample
       [
         x[:file],
         'A',
-        x[:speaker],
+        speaker_or_default(x),
         x[:beg],
         x[:end],
         fix_parens(x[:text])
       ].join ' '
     end.join("\n") + "\n"
+  end
+
+  # Speaker label for output formats that require one. Input without a
+  # speaker column would otherwise emit an empty, malformed field.
+  def speaker_or_default(segment)
+    speaker = segment[:speaker].to_s
+    speaker.empty? ? DEFAULT_SPEAKER : speaker
   end
 
   # Convert segments to NIST CTM (Conversation Time Marked) format.
@@ -754,9 +796,17 @@ class Sample
 
   def init_from_arg
     raise "bad args" if ARGV.length != 1
-    fn = ARGV[0]
-    string = File.read fn
-    init_from(string:)
+    path = ARGV[0]
+    string = File.read path
+    # Pass fn: through -- every vendor JSON parser needs it to populate the
+    # file column, and without it the JSON formats fail for all the bin/
+    # scripts that load their input this way.
+    #
+    # Basename, not the raw path: split and rttm interpolate this column into
+    # output filenames, and stm/ctm write it as the waveform id. A directory
+    # prefix would break both, and would make output depend on the caller's
+    # working directory.
+    init_from(string:, fn: File.basename(path))
   end
 
   def get_files
@@ -799,7 +849,9 @@ class Sample
       files[x[:file]] << x
       overlap[x[:file]] ||= 0
       files[x[:file]].each do |y|
-        next if x == y
+        # Identity, not value equality: two distinct segments with identical
+        # fields are a real overlap, not a segment compared against itself.
+        next if y.equal?(x)
         if x[:end] > y[:beg] and x[:beg] < y[:end]
           b = x[:beg] > y[:beg] ? x[:beg] : y[:beg]
           e = x[:end] < y[:end] ? x[:end] : y[:end]
@@ -959,8 +1011,10 @@ class Sample
         end
 
         if should_merge
-          # Merge: extend end time and concatenate text
-          current_merged[:end] = seg[:end]
+          # Merge: extend end time and concatenate text. Take the later of
+          # the two ends -- a segment nested inside the current one would
+          # otherwise move the end backwards and discard audio.
+          current_merged[:end] = [ current_merged[:end], seg[:end] ].max
           current_merged[:text] = "#{current_merged[:text]} #{seg[:text]}"
         else
           # Don't merge: save current merged segment and start new one
