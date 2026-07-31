@@ -50,11 +50,12 @@ which made the header disagree with the rows; none of the three say anything
 about a passage reading, so all three are dropped.  The remaining columns
 are renamed to the file/beg/end/text this toolkit uses everywhere else.
 
-The array is required to be in passage order, with each object's
-passageIndex equal to its position, and the script stops if it is not.
-Nothing in the output records passage number any more, so row order is the
-only thing left that conveys it -- a file that breaks this assumption would
-otherwise produce silently scrambled output.
+Rows are ordered by passageIndex, whatever order the array is in.  Nothing
+in the output records the passage number, so row order is the only thing
+carrying it, and it should come from the data rather than from however the
+file happened to be serialized.  A passageIndex that is missing, not an
+integer, or duplicated stops the run, since there is then nothing to order
+by.  Gaps are allowed and just mean one fewer row.
 
 =end
 
@@ -100,19 +101,31 @@ def format_time(x)
   x.to_f.round(3)
 end
 
-# The array is expected to be in passage order, each object's passageIndex
-# matching its position.  Verify rather than sort: a mismatch means the file
-# is not shaped the way this script assumes -- passages missing, duplicated,
-# or ordered some other way -- and that is worth stopping for rather than
-# quietly reordering around.  No output column records the passage number, so
-# row order is the only thing carrying it.
-def check_passage_order(passages, fn:)
+# Rows come out in passageIndex order whatever order the array is in.  No
+# output column records the passage number, so row order is the only thing
+# carrying it, and it should come from the data rather than from however the
+# file happened to be serialized.
+#
+# Gaps are fine -- a missing passage just means one fewer row.  A passageIndex
+# that is absent or not an integer is not, since there is then nothing to sort
+# by, and neither are duplicates, which would make the order among them
+# arbitrary.
+def sort_by_passage_index(passages, fn:)
   passages.each_with_index do |passage, position|
     index = passage['passageIndex']
-    next if index.is_a?(Integer) && index == position
-    raise "#{fn}: passage at position #{position} has passageIndex " \
-          "#{index.inspect}, expected #{position}"
+    unless index.is_a? Integer
+      raise "#{fn}: passage at position #{position} has passageIndex " \
+            "#{index.inspect}, expected an integer"
+    end
   end
+
+  indexes = passages.map { |p| p['passageIndex'] }
+  duplicated = indexes.tally.select { |_, n| n > 1 }.keys.sort
+  unless duplicated.empty?
+    raise "#{fn}: duplicate passageIndex #{duplicated.join ', '}"
+  end
+
+  passages.sort_by { |p| p['passageIndex'] }
 end
 
 # A tab or newline in either text source would split or truncate the row and
@@ -128,9 +141,7 @@ def rows_from(object, fn:, asr_text:)
     raise "#{fn}: expected a json array of passages, got #{object.class}"
   end
 
-  check_passage_order(object, fn:)
-
-  object.filter_map do |passage|
+  sort_by_passage_index(object, fn:).filter_map do |passage|
     index = passage['passageIndex']
     asr = passage[ENGINE]
 
