@@ -50,6 +50,11 @@ which made the header disagree with the rows; none of the three say anything
 about a passage reading, so all three are dropped.  The remaining columns
 are renamed to the file/beg/end/text this toolkit uses everywhere else.
 
+Passage text is often laid out over several lines.  A tsv field cannot hold
+that layout, so runs of whitespace -- newlines and tabs included -- collapse
+to a single space, and a note goes to stderr saying how many passages in the
+file were affected.
+
 Rows are ordered by passageIndex, whatever order the array is in.  Nothing
 in the output records the passage number, so row order is the only thing
 carrying it, and it should come from the data rather than from however the
@@ -128,12 +133,13 @@ def sort_by_passage_index(passages, fn:)
   passages.sort_by { |p| p['passageIndex'] }
 end
 
-# A tab or newline in either text source would split or truncate the row and
-# corrupt every column after it.  Neither appears in the data seen so far,
-# but a silently mangled tsv is worse than a stopped run.
-def check_text(text, fn:, index:, field:)
-  return unless text =~ /[\t\r\n]/
-  raise "#{fn}: passage #{index}: #{field} contains a tab or newline"
+# Text goes into a single tsv field, so internal whitespace has to collapse:
+# a tab would split the row and a newline would truncate it, corrupting every
+# column after.  A passage laid out over several lines cannot keep that layout
+# in this format whatever we do, so collapse runs of whitespace to one space
+# rather than refusing the file.
+def flatten_text(text)
+  text.to_s.gsub(/\s+/, ' ').strip
 end
 
 def rows_from(object, fn:, asr_text:)
@@ -141,7 +147,9 @@ def rows_from(object, fn:, asr_text:)
     raise "#{fn}: expected a json array of passages, got #{object.class}"
   end
 
-  sort_by_passage_index(object, fn:).filter_map do |passage|
+  flattened = 0
+
+  rows = sort_by_passage_index(object, fn:).filter_map do |passage|
     index = passage['passageIndex']
     asr = passage[ENGINE]
 
@@ -166,19 +174,15 @@ def rows_from(object, fn:, asr_text:)
       next
     end
 
-    if asr_text
-      text = asr['text'].to_s.strip
-      field = "#{ENGINE} text"
-    else
-      text = passage['expectedText'].to_s.strip
-      field = 'expectedText'
-    end
+    raw = asr_text ? asr['text'] : passage['expectedText']
+    field = asr_text ? "#{ENGINE} text" : 'expectedText'
+    text = flatten_text(raw)
+    flattened += 1 if text != raw.to_s.strip
 
     if text.empty?
       STDERR.puts "#{fn}: passage #{index}: empty #{field}, skipping"
       next
     end
-    check_text(text, fn:, index:, field:)
 
     [
       passage['activityId'],
@@ -187,6 +191,14 @@ def rows_from(object, fn:, asr_text:)
       text
     ].join("\t")
   end
+
+  # Say so once per file rather than once per passage.  This is a change to
+  # the data, even if an unavoidable one, so it should not be silent.
+  if flattened > 0
+    STDERR.puts "#{fn}: collapsed internal whitespace in #{flattened} passage(s)"
+  end
+
+  rows
 end
 
 rows = files.sort.flat_map do |fn|
